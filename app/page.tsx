@@ -43,6 +43,14 @@ export default async function HomePage({
     query = query.eq("perfume.scent_family", params.scent);
   }
 
+  // Price filter
+  if (params.price_min) {
+    query = query.gte("price_per_slot", Number(params.price_min));
+  }
+  if (params.price_max) {
+    query = query.lte("price_per_slot", Number(params.price_max));
+  }
+
   // Sort
   if (params.sort === "price_asc") {
     query = query.order("price_per_slot", { ascending: true });

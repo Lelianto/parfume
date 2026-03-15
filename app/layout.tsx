@@ -8,6 +8,19 @@ export const metadata: Metadata = {
   title: "Wangiverse - Split Parfum Premium",
   description:
     "Platform split parfum original premium. Nikmati wangi mewah dengan harga terjangkau.",
+  metadataBase: new URL("https://wangiverse.com"),
+  openGraph: {
+    title: "Wangiverse - Split Parfum Premium",
+    description: "Platform split parfum original premium. Nikmati wangi mewah dengan harga terjangkau.",
+    siteName: "Wangiverse",
+    locale: "id_ID",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Wangiverse - Split Parfum Premium",
+    description: "Platform split parfum original premium. Nikmati wangi mewah dengan harga terjangkau.",
+  },
 };
 
 export default function RootLayout({
