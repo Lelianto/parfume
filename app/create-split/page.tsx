@@ -18,6 +18,7 @@ interface SplitDraft {
   step: number;
   brand: string;
   perfumeName: string;
+  perfumeVariant: string;
   description: string;
   concentration: string;
   bottleSize: string;
@@ -56,6 +57,7 @@ export default function CreateSplitPage() {
   // Perfume fields
   const [brand, setBrand] = useState("");
   const [perfumeName, setPerfumeName] = useState("");
+  const [perfumeVariant, setPerfumeVariant] = useState("");
   const [description, setDescription] = useState("");
   const [concentration, setConcentration] = useState<Concentration | "">("");
 
@@ -100,6 +102,7 @@ export default function CreateSplitPage() {
       step,
       brand,
       perfumeName,
+      perfumeVariant,
       description,
       concentration,
       bottleSize,
@@ -115,12 +118,13 @@ export default function CreateSplitPage() {
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  }, [step, brand, perfumeName, description, concentration, bottleSize, batchCode, isReadyStock, variants, topNotes, middleNotes, baseNotes, scentFamily, bottlePhoto, batchCodePhoto]);
+  }, [step, brand, perfumeName, perfumeVariant, description, concentration, bottleSize, batchCode, isReadyStock, variants, topNotes, middleNotes, baseNotes, scentFamily, bottlePhoto, batchCodePhoto]);
 
   function restoreDraft(draft: SplitDraft) {
     setStep(draft.step);
     setBrand(draft.brand);
     setPerfumeName(draft.perfumeName);
+    setPerfumeVariant(draft.perfumeVariant || "");
     setDescription(draft.description);
     setConcentration(draft.concentration as Concentration | "");
     setBottleSize(draft.bottleSize);
@@ -407,6 +411,7 @@ export default function CreateSplitPage() {
         .insert({
           brand,
           name: perfumeName,
+          variant: perfumeVariant.trim() || null,
           description: description || null,
           concentration: concentration || null,
           top_notes: finalTopNotes,
@@ -607,6 +612,19 @@ export default function CreateSplitPage() {
                     placeholder="contoh: Sauvage"
                     className="input-dark mt-1"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Varian</label>
+                  <input
+                    type="text"
+                    value={perfumeVariant}
+                    onChange={(e) => setPerfumeVariant(e.target.value)}
+                    placeholder="contoh: LILAC, CHROMA, UTOPIA (opsional)"
+                    className="input-dark mt-1"
+                  />
+                  <p className="mt-1 text-[11px] text-gold-200/25">
+                    Varian khusus brand, jika ada. Contoh: HMNS punya LILAC, CHROMA, dll.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Konsentrasi</label>

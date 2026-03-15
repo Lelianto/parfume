@@ -18,15 +18,9 @@ import {
   Droplets,
   Star,
   FlaskConical,
+  MapPin,
 } from "lucide-react";
-
-function formatRupiah(amount: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
+import { formatRupiah } from "@/lib/utils";
 
 function useCountdown(deadline: string | null) {
   const [timeLeft, setTimeLeft] = useState("");
@@ -154,6 +148,9 @@ export function OrderDetailClient({
           </p>
           <p className="font-display text-xl font-bold text-gold-100">
             {split.perfume?.name}
+            {split.perfume?.variant && (
+              <span className="text-gold-200/50"> — {split.perfume.variant}</span>
+            )}
           </p>
           <div className="mt-1.5 flex items-center gap-3">
             <OrderStatusBadge status={order.status} />
@@ -165,6 +162,28 @@ export function OrderDetailClient({
           </div>
         </div>
       </div>
+
+      {/* Shipping Address */}
+      {order.shipping_name && (
+        <div className="mt-6 rounded-2xl border border-gold-900/20 bg-surface-200/60 p-5">
+          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gold-200/60">
+            <MapPin size={14} /> Alamat Pengiriman
+          </h2>
+          <div className="space-y-1 text-sm">
+            <p className="font-medium text-gold-100">{order.shipping_name}</p>
+            <p className="text-gold-200/50">{order.shipping_phone}</p>
+            <p className="text-gold-200/50">{order.shipping_address}</p>
+            <p className="text-gold-200/50">
+              {[order.shipping_village, order.shipping_district, order.shipping_city, order.shipping_province]
+                .filter(Boolean)
+                .join(", ")}
+            </p>
+            {order.shipping_postal_code && (
+              <p className="font-mono text-xs text-gold-200/40">{order.shipping_postal_code}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="my-6 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
 

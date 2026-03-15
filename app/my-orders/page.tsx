@@ -5,16 +5,9 @@ import Image from "next/image";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { Package, Droplets, Clock } from "lucide-react";
 import type { Order } from "@/types/database";
+import { formatRupiah } from "@/lib/utils";
 
 export const revalidate = 0;
-
-function formatRupiah(amount: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
 
 export default async function MyOrdersPage() {
   const supabase = await createClient();
@@ -77,6 +70,9 @@ export default async function MyOrdersPage() {
                       </p>
                       <p className="font-display font-semibold text-gold-100">
                         {order.split?.perfume?.name}
+                        {order.split?.perfume?.variant && (
+                          <span className="text-gold-200/50"> — {order.split.perfume.variant}</span>
+                        )}
                       </p>
                     </div>
                     <OrderStatusBadge status={order.status} />

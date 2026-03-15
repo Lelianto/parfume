@@ -10,14 +10,7 @@ import {
   Droplets,
   ClipboardList,
 } from "lucide-react";
-
-function formatRupiah(amount: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
+import { formatRupiah } from "@/lib/utils";
 
 type StatusFilter = "all" | "active" | "pending_payment" | "paid" | "confirmed" | "decanting" | "shipped" | "completed" | "cancelled";
 
@@ -129,6 +122,9 @@ export function SellerOrdersClient({ orders }: { orders: SellerOrder[] }) {
                         </p>
                         <p className="truncate font-display text-sm font-semibold text-gold-100">
                           {order.split?.perfume?.name}
+                          {order.split?.perfume?.variant && (
+                            <span className="text-gold-200/50"> — {order.split.perfume.variant}</span>
+                          )}
                         </p>
                       </div>
                       <OrderStatusBadge status={order.status} />

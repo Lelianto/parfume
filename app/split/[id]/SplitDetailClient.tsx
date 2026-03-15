@@ -23,16 +23,10 @@ import {
   Trash2,
   Eye,
   EyeOff,
+  MapPin,
 } from "lucide-react";
 import Link from "next/link";
-
-function formatRupiah(amount: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
+import { formatRupiah } from "@/lib/utils";
 
 export function SplitDetailClient({
   split,
@@ -245,6 +239,9 @@ export function SplitDetailClient({
           </p>
           <h1 className="mt-1.5 font-display text-3xl font-bold tracking-[-0.02em] text-gold-100 sm:text-4xl">
             {perfume?.name}
+            {perfume?.variant && (
+              <span className="text-gold-200/50"> — {perfume.variant}</span>
+            )}
           </h1>
 
           {/* Concentration badge */}
@@ -416,8 +413,13 @@ export function SplitDetailClient({
                 <p className="text-sm font-medium text-gold-100">
                   {split.creator.name}
                 </p>
-                {split.creator.city && (
-                  <p className="text-[11px] text-gold-200/30">{split.creator.city}</p>
+                {(split.creator.store_city || split.creator.city) && (
+                  <p className="flex items-center gap-1 text-[11px] text-gold-200/30">
+                    <MapPin size={10} />
+                    {split.creator.store_city
+                      ? `${split.creator.store_city}${split.creator.store_province ? `, ${split.creator.store_province}` : ""}`
+                      : split.creator.city}
+                  </p>
                 )}
               </div>
               <span className="text-xs text-gold-200/30">Lihat Toko →</span>

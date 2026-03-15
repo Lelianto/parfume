@@ -88,9 +88,12 @@ export default async function SellerPage({
             <h1 className="font-display text-2xl font-bold text-gold-100">
               {sellerUser.name}
             </h1>
-            {sellerUser.city && (
+            {(sellerUser.store_city || sellerUser.city) && (
               <p className="mt-1 flex items-center justify-center gap-1 text-sm text-gold-200/40 sm:justify-start">
-                <MapPin size={14} /> {sellerUser.city}
+                <MapPin size={14} />
+                {sellerUser.store_city
+                  ? `${sellerUser.store_city}${sellerUser.store_province ? `, ${sellerUser.store_province}` : ""}`
+                  : sellerUser.city}
               </p>
             )}
             {sellerUser.bio && (

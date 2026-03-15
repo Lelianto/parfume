@@ -15,14 +15,7 @@ import {
   XCircle,
   Clock,
 } from "lucide-react";
-
-function formatRupiah(amount: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
+import { formatRupiah } from "@/lib/utils";
 
 function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString("id-ID", {
@@ -194,7 +187,7 @@ export function AdminDashboardClient({ orders }: { orders: AdminOrder[] }) {
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <p className="truncate font-display text-sm font-semibold text-gold-100">
-                          {order.split?.perfume?.brand} — {order.split?.perfume?.name}
+                          {order.split?.perfume?.brand} — {order.split?.perfume?.name}{order.split?.perfume?.variant ? ` (${order.split.perfume.variant})` : ""}
                         </p>
                         <div className="mt-1 flex flex-col gap-1 text-xs text-gold-200/40 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-3 sm:gap-y-1">
                           <span>Pembeli: <span className="text-gold-200/60">{order.user?.name}</span></span>

@@ -53,6 +53,7 @@ export async function PATCH(
     const {
       brand,
       perfumeName,
+      perfumeVariant,
       description,
       concentration,
       bottleSize,
@@ -75,6 +76,7 @@ export async function PATCH(
         .update({
           brand,
           name: perfumeName,
+          variant: perfumeVariant !== undefined ? (perfumeVariant || null) : undefined,
           description: description || null,
           concentration: concentration || null,
           top_notes: topNotes ?? [],

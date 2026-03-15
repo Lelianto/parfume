@@ -38,6 +38,7 @@ export default function EditSplitPage() {
   // Perfume fields
   const [brand, setBrand] = useState("");
   const [perfumeName, setPerfumeName] = useState("");
+  const [perfumeVariant, setPerfumeVariant] = useState("");
   const [description, setDescription] = useState("");
   const [concentration, setConcentration] = useState<Concentration | "">("");
 
@@ -110,6 +111,7 @@ export default function EditSplitPage() {
       // Populate form
       setBrand(s.perfume?.brand ?? "");
       setPerfumeName(s.perfume?.name ?? "");
+      setPerfumeVariant(s.perfume?.variant ?? "");
       setDescription(s.description ?? "");
       setConcentration((s.perfume?.concentration as Concentration) ?? "");
       setBottleSize(String(s.bottle_size_ml));
@@ -376,6 +378,7 @@ export default function EditSplitPage() {
         body: JSON.stringify({
           brand,
           perfumeName,
+          perfumeVariant: perfumeVariant.trim() || null,
           description,
           concentration,
           bottleSize: Number(bottleSize),
@@ -506,6 +509,19 @@ export default function EditSplitPage() {
                     placeholder="contoh: Sauvage"
                     className="input-dark mt-1"
                   />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Varian</label>
+                  <input
+                    type="text"
+                    value={perfumeVariant}
+                    onChange={(e) => setPerfumeVariant(e.target.value)}
+                    placeholder="contoh: LILAC, CHROMA, UTOPIA (opsional)"
+                    className="input-dark mt-1"
+                  />
+                  <p className="mt-1 text-[11px] text-gold-200/25">
+                    Varian khusus brand, jika ada.
+                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Konsentrasi</label>

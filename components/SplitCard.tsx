@@ -4,14 +4,7 @@ import { ProgressBar } from "./ProgressBar";
 import { SplitStatusBadge } from "./StatusBadge";
 import type { Split } from "@/types/database";
 import { Droplets } from "lucide-react";
-
-function formatRupiah(amount: number): string {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: "IDR",
-    minimumFractionDigits: 0,
-  }).format(amount);
-}
+import { formatRupiah } from "@/lib/utils";
 
 export function SplitCard({ split }: { split: Split }) {
   const variants = split.variants ?? [];
@@ -54,6 +47,9 @@ export function SplitCard({ split }: { split: Split }) {
           </p>
           <h3 className="mt-0.5 font-display text-sm font-semibold leading-snug text-gold-100 line-clamp-2 sm:mt-1 sm:text-[1.1rem]">
             {split.perfume?.name}
+            {split.perfume?.variant && (
+              <span className="text-gold-200/50"> — {split.perfume.variant}</span>
+            )}
           </h3>
 
           {/* Concentration badge */}

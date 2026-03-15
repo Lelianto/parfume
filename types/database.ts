@@ -3,6 +3,17 @@ export type OrderStatus = "pending_payment" | "paid" | "pending" | "confirmed" |
 export type Concentration = "EDP" | "EDT" | "Parfum" | "EDC" | "Cologne";
 export type ScentFamily = "Woody" | "Floral" | "Oriental" | "Fresh" | "Citrus" | "Aquatic" | "Gourmand" | "Aromatic" | "Chypre" | "Fougere";
 
+export interface ShippingAddress {
+  name: string;
+  phone: string;
+  province: string;
+  city: string;
+  district: string;
+  village: string;
+  postal_code: string;
+  address: string; // detail address / patokan
+}
+
 export interface User {
   id: string;
   email: string;
@@ -11,6 +22,18 @@ export interface User {
   bio: string | null;
   whatsapp: string | null;
   city: string | null;
+  // default address
+  address_name: string | null;
+  address_phone: string | null;
+  address_province: string | null;
+  address_city: string | null;
+  address_district: string | null;
+  address_village: string | null;
+  address_postal_code: string | null;
+  address_detail: string | null;
+  // store location
+  store_province: string | null;
+  store_city: string | null;
   created_at: string;
 }
 
@@ -18,6 +41,7 @@ export interface Perfume {
   id: string;
   brand: string;
   name: string;
+  variant: string | null;
   description: string | null;
   concentration: Concentration | null;
   top_notes: string[];
@@ -81,6 +105,15 @@ export interface Order {
   payment_proof_url: string | null;
   payment_deadline: string | null;
   shipping_deadline: string | null;
+  // shipping address
+  shipping_name: string | null;
+  shipping_phone: string | null;
+  shipping_province: string | null;
+  shipping_city: string | null;
+  shipping_district: string | null;
+  shipping_village: string | null;
+  shipping_postal_code: string | null;
+  shipping_address: string | null;
   confirmed_at: string | null;
   shipped_at: string | null;
   completed_at: string | null;
