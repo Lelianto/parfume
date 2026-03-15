@@ -86,6 +86,8 @@ export interface Split {
   perfume?: Perfume;
   creator?: User;
   variants?: SplitVariant[];
+  avg_rating?: number | null;
+  review_count?: number | null;
 }
 
 export interface SplitSlot {
@@ -136,4 +138,12 @@ export interface Review {
   created_at: string;
   // joined
   user?: User;
+}
+
+export interface Wishlist {
+  id: string;
+  user_id: string;
+  split_id: string;
+  created_at: string;
+  split?: Split & { perfume?: Perfume; variants?: SplitVariant[] };
 }

@@ -18,7 +18,7 @@ export default async function HomePage({
   // Build query
   let query = supabase
     .from("splits")
-    .select("*, perfume:perfumes(*), variants:split_variants(*)");
+    .select("*, perfume:perfumes(*), variants:split_variants(*), reviews:reviews(rating)");
 
   // Search filter
   if (params.q) {
@@ -74,6 +74,26 @@ export default async function HomePage({
     .order("brand");
 
   const brands = [...new Set((brandsData ?? []).map((b) => b.brand))];
+
+  // Compute avg_rating per split from joined reviews
+  const splitsWithRating = activeSplits.map((s: any) => {
+    const reviews: { rating: number }[] = s.reviews ?? [];
+    const avg = reviews.length > 0
+      ? reviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) / reviews.length
+      : null;
+    return { ...s, avg_rating: avg, review_count: reviews.length || null };
+  });
+
+  // Fetch current user and their wishlist
+  const { data: { user } } = await supabase.auth.getUser();
+  let wishlistedIds: string[] = [];
+  if (user) {
+    const { data: wishlists } = await supabase
+      .from("wishlists")
+      .select("split_id")
+      .eq("user_id", user.id);
+    wishlistedIds = (wishlists ?? []).map((w: { split_id: string }) => w.split_id);
+  }
 
   return (
     <div>
@@ -213,7 +233,7 @@ export default async function HomePage({
           </Suspense>
         </div>
 
-        <SplitGrid splits={activeSplits} />
+        <SplitGrid splits={splitsWithRating} isLoggedIn={!!user} wishlistedIds={wishlistedIds} />
       </section>
     </div>
   );

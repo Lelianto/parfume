@@ -18,6 +18,7 @@ import {
   Droplets,
   ArrowLeft,
   UserCircle,
+  Bookmark,
 } from "lucide-react";
 
 export function Navbar() {
@@ -61,6 +62,7 @@ export function Navbar() {
     ? [
         { href: "/", label: "Jelajahi", icon: Compass },
         { href: "/create-split", label: "Buat Split", icon: PlusCircle },
+        { href: "/wishlist", label: "Wishlist", icon: Bookmark },
         { href: "/my-orders", label: "Pesanan Saya", icon: Package },
         { href: "/seller/orders", label: "Kelola Pesanan", icon: ClipboardList },
         { href: `/seller/${user.id}`, label: "Toko Saya", icon: Store },
