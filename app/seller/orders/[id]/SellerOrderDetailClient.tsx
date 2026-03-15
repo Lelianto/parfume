@@ -22,6 +22,7 @@ import {
   Mail,
   Eye,
   XCircle,
+  Banknote,
 } from "lucide-react";
 import { formatRupiah, formatDate } from "@/lib/utils";
 
@@ -494,12 +495,41 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
 
         {/* Completed */}
         {order.status === "completed" && (
-          <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-            <Package size={20} className="flex-shrink-0 text-emerald-400" />
-            <div>
-              <p className="text-sm font-medium text-emerald-400">Pesanan selesai</p>
-              <p className="text-xs text-gold-200/40">Transaksi telah selesai.</p>
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+              <Package size={20} className="flex-shrink-0 text-emerald-400" />
+              <div>
+                <p className="text-sm font-medium text-emerald-400">Pesanan selesai</p>
+                <p className="text-xs text-gold-200/40">Transaksi telah selesai.</p>
+              </div>
             </div>
+
+            {/* Disbursement status */}
+            {order.disbursement_status === "pending" && (
+              <div className="flex items-center gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+                <Banknote size={20} className="flex-shrink-0 text-violet-400" />
+                <div>
+                  <p className="text-sm font-medium text-violet-400">Dana belum dicairkan</p>
+                  <p className="text-xs text-gold-200/40">
+                    Admin akan mentransfer dana ke rekening kamu. Pastikan info rekening di profil sudah benar.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {order.disbursement_status === "disbursed" && (
+              <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                <Banknote size={20} className="flex-shrink-0 text-emerald-400" />
+                <div>
+                  <p className="text-sm font-medium text-emerald-400">Dana sudah dicairkan</p>
+                  <p className="text-xs text-gold-200/40">
+                    {order.disbursed_at
+                      ? `Dicairkan pada ${formatDate(order.disbursed_at)}`
+                      : "Dana telah ditransfer ke rekening kamu."}
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

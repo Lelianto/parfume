@@ -8,7 +8,7 @@ import { OrderStatusBadge } from "@/components/StatusBadge";
 import { OrderTimeline } from "@/components/OrderTimeline";
 import { getTrackingInfo } from "@/lib/tracking";
 import { formatRupiah } from "@/lib/utils";
-import type { Order, Split, User } from "@/types/database";
+import type { Order, Split, User, PlatformSettings } from "@/types/database";
 import {
   ArrowLeft,
   Upload,
@@ -90,7 +90,13 @@ type OrderWithSplit = Order & {
   };
 };
 
-export function OrderDetailClient({ order: initialOrder }: { order: OrderWithSplit }) {
+export function OrderDetailClient({
+  order: initialOrder,
+  platformSettings,
+}: {
+  order: OrderWithSplit;
+  platformSettings?: PlatformSettings | null;
+}) {
   const [order, setOrder] = useState(initialOrder);
   const [uploading, setUploading] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -240,28 +246,28 @@ export function OrderDetailClient({ order: initialOrder }: { order: OrderWithSpl
             </div>
           </div>
 
-          {/* Bank Info */}
-          {creator?.bank_name ? (
+          {/* Bank Info — Transfer ke rekening Wangiverse (escrow) */}
+          {platformSettings?.bank_name ? (
             <div className="rounded-xl border border-gold-900/20 bg-surface-200/80 p-5">
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
-                Transfer ke rekening berikut
+                Transfer ke Rekening Wangiverse
               </p>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs text-gold-200/40">Bank</p>
-                    <p className="font-semibold text-gold-100">{creator.bank_name}</p>
+                    <p className="font-semibold text-gold-100">{platformSettings.bank_name}</p>
                   </div>
                 </div>
                 <div className="flex items-center justify-between rounded-lg bg-surface-300/60 px-4 py-3">
                   <div>
                     <p className="text-xs text-gold-200/40">Nomor Rekening</p>
                     <p className="font-mono text-lg font-bold text-gold-100">
-                      {creator.bank_account_number}
+                      {platformSettings.bank_account_number}
                     </p>
-                    <p className="text-xs text-gold-200/40">a.n. {creator.bank_account_name}</p>
+                    <p className="text-xs text-gold-200/40">a.n. {platformSettings.bank_account_name}</p>
                   </div>
-                  <CopyButton text={creator.bank_account_number ?? ""} />
+                  <CopyButton text={platformSettings.bank_account_number ?? ""} />
                 </div>
                 <div className="flex items-center justify-between rounded-lg border border-gold-700/20 bg-gold-400/5 px-4 py-3">
                   <div>
@@ -280,7 +286,7 @@ export function OrderDetailClient({ order: initialOrder }: { order: OrderWithSpl
                 Info pembayaran
               </p>
               <p className="text-sm text-gold-200/40">
-                Hubungi seller untuk mendapatkan info rekening pembayaran.
+                Admin belum mengatur rekening pembayaran. Silakan hubungi admin atau seller.
               </p>
               {waUrl && (
                 <a

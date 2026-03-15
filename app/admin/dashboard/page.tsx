@@ -1,12 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { AdminDashboardClient } from "./AdminDashboardClient";
-import type { Order, Split } from "@/types/database";
+import type { Order, Split, PlatformSettings } from "@/types/database";
 
 export const revalidate = 0;
 
 export interface AdminOrder extends Order {
-  split: Split & { creator?: { name: string; email: string } };
+  split: Split & { creator?: { name: string; email: string; bank_name: string | null; bank_account_number: string | null; bank_account_name: string | null } };
   user?: { name: string; avatar_url: string | null; email: string };
 }
 
@@ -26,17 +26,23 @@ export default async function AdminDashboardPage() {
 
   if (!count || count === 0) redirect("/admin/login?error=not_admin");
 
-  // Fetch orders that need admin attention (paid = needs verification)
-  // Also fetch all recent orders for overview
-  const { data: orders } = await supabase
-    .from("orders")
-    .select("*, split:splits(*, perfume:perfumes(*), creator:users!splits_created_by_fkey(name, email)), user:users(name, avatar_url, email)")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  const [{ data: orders }, { data: platformSettings }] = await Promise.all([
+    supabase
+      .from("orders")
+      .select("*, split:splits(*, perfume:perfumes(*), creator:users!splits_created_by_fkey(name, email, bank_name, bank_account_number, bank_account_name)), user:users(name, avatar_url, email)")
+      .order("created_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("platform_settings")
+      .select("*")
+      .eq("id", 1)
+      .single(),
+  ]);
 
   return (
     <AdminDashboardClient
       orders={(orders ?? []) as unknown as AdminOrder[]}
+      platformSettings={platformSettings as unknown as PlatformSettings | null}
     />
   );
 }

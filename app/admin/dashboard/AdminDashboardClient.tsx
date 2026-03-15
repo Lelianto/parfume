@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import type { AdminOrder } from "./page";
+import type { PlatformSettings } from "@/types/database";
 import {
   ShieldCheck,
   Package,
@@ -14,6 +15,10 @@ import {
   Eye,
   XCircle,
   Clock,
+  Banknote,
+  AlertTriangle,
+  Settings,
+  Save,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 
@@ -26,10 +31,11 @@ function formatDate(dateStr: string): string {
   });
 }
 
-type Filter = "needs_verification" | "all" | "confirmed" | "shipped" | "completed" | "cancelled";
+type Filter = "needs_verification" | "needs_disbursement" | "all" | "confirmed" | "shipped" | "completed" | "cancelled";
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "needs_verification", label: "Perlu Verifikasi" },
+  { value: "needs_disbursement", label: "Perlu Dicairkan" },
   { value: "all", label: "Semua" },
   { value: "confirmed", label: "Dikonfirmasi" },
   { value: "shipped", label: "Dikirim" },
@@ -37,19 +43,34 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: "cancelled", label: "Dibatalkan" },
 ];
 
-export function AdminDashboardClient({ orders }: { orders: AdminOrder[] }) {
+export function AdminDashboardClient({
+  orders,
+  platformSettings: initialSettings,
+}: {
+  orders: AdminOrder[];
+  platformSettings?: PlatformSettings | null;
+}) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("needs_verification");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
 
+  // Platform settings form
+  const [bankName, setBankName] = useState(initialSettings?.bank_name ?? "");
+  const [bankAccountNumber, setBankAccountNumber] = useState(initialSettings?.bank_account_number ?? "");
+  const [bankAccountName, setBankAccountName] = useState(initialSettings?.bank_account_name ?? "");
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState("");
+
   const filtered = orders.filter((o) => {
     if (filter === "needs_verification") return o.status === "paid";
+    if (filter === "needs_disbursement") return o.status === "completed" && o.disbursement_status === "pending";
     if (filter === "all") return true;
     return o.status === filter;
   });
 
   const needsVerification = orders.filter((o) => o.status === "paid").length;
+  const needsDisbursement = orders.filter((o) => o.status === "completed" && o.disbursement_status === "pending").length;
 
   async function handleVerify(orderId: string) {
     setActionLoading(orderId + "confirm");
@@ -100,6 +121,60 @@ export function AdminDashboardClient({ orders }: { orders: AdminOrder[] }) {
     router.refresh();
   }
 
+  async function handleDisburse(orderId: string) {
+    if (!confirm("Tandai dana sudah dicairkan ke rekening seller?")) return;
+    setActionLoading(orderId + "disburse");
+
+    const res = await fetch(`/api/admin/orders/${orderId}/disburse`, {
+      method: "POST",
+    });
+
+    if (!res.ok) {
+      let errMsg = "Gagal mencairkan";
+      try {
+        const data = await res.json();
+        errMsg = data.error || errMsg;
+      } catch {
+        errMsg = `Server error (${res.status})`;
+      }
+      alert(errMsg);
+    }
+
+    setActionLoading(null);
+    router.refresh();
+  }
+
+  async function handleSaveSettings() {
+    setSettingsLoading(true);
+    setSettingsMsg("");
+
+    const res = await fetch("/api/admin/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bank_name: bankName,
+        bank_account_number: bankAccountNumber,
+        bank_account_name: bankAccountName,
+      }),
+    });
+
+    if (!res.ok) {
+      let errMsg = "Gagal menyimpan";
+      try {
+        const data = await res.json();
+        errMsg = data.error || errMsg;
+      } catch {
+        errMsg = `Server error (${res.status})`;
+      }
+      setSettingsMsg(errMsg);
+    } else {
+      setSettingsMsg("Tersimpan!");
+      setTimeout(() => setSettingsMsg(""), 3000);
+    }
+
+    setSettingsLoading(false);
+  }
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-8">
       <div className="flex items-center gap-3">
@@ -111,10 +186,14 @@ export function AdminDashboardClient({ orders }: { orders: AdminOrder[] }) {
       </p>
 
       {/* Stats */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className="mt-6 grid gap-4 sm:grid-cols-4">
         <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
           <p className="text-xs text-gold-200/40">Perlu Verifikasi</p>
           <p className="mt-1 font-display text-2xl font-bold text-orange-400">{needsVerification}</p>
+        </div>
+        <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
+          <p className="text-xs text-gold-200/40">Perlu Dicairkan</p>
+          <p className="mt-1 font-display text-2xl font-bold text-violet-400">{needsDisbursement}</p>
         </div>
         <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
           <p className="text-xs text-gold-200/40">Total Pesanan</p>
@@ -125,6 +204,61 @@ export function AdminDashboardClient({ orders }: { orders: AdminOrder[] }) {
           <p className="mt-1 font-display text-2xl font-bold text-emerald-400">
             {orders.filter((o) => o.status === "completed").length}
           </p>
+        </div>
+      </div>
+
+      {/* Platform Settings */}
+      <div className="mt-6 rounded-2xl border border-gold-900/20 bg-surface-200/60 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Settings size={16} className="text-gold-400" />
+          <h2 className="text-sm font-semibold text-gold-200/60">Rekening Platform (Escrow)</h2>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div>
+            <label className="block text-xs text-gold-200/40 mb-1">Bank</label>
+            <input
+              type="text"
+              value={bankName}
+              onChange={(e) => setBankName(e.target.value)}
+              placeholder="BCA, Mandiri, dll"
+              className="input-dark w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gold-200/40 mb-1">Nomor Rekening</label>
+            <input
+              type="text"
+              value={bankAccountNumber}
+              onChange={(e) => setBankAccountNumber(e.target.value)}
+              placeholder="1234567890"
+              className="input-dark w-full"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gold-200/40 mb-1">Nama Pemilik</label>
+            <input
+              type="text"
+              value={bankAccountName}
+              onChange={(e) => setBankAccountName(e.target.value)}
+              placeholder="PT Wangiverse"
+              className="input-dark w-full"
+            />
+          </div>
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            onClick={handleSaveSettings}
+            disabled={settingsLoading}
+            className="flex items-center gap-2 rounded-lg bg-gold-400/15 px-4 py-2 text-xs font-semibold text-gold-400 transition-colors hover:bg-gold-400/25 disabled:opacity-50"
+          >
+            {settingsLoading ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Simpan
+          </button>
+          {settingsMsg && (
+            <span className={`text-xs ${settingsMsg === "Tersimpan!" ? "text-emerald-400" : "text-red-400"}`}>
+              {settingsMsg}
+            </span>
+          )}
         </div>
       </div>
 
@@ -146,6 +280,11 @@ export function AdminDashboardClient({ orders }: { orders: AdminOrder[] }) {
                 {needsVerification}
               </span>
             )}
+            {f.value === "needs_disbursement" && needsDisbursement > 0 && (
+              <span className="ml-1.5 rounded-full bg-violet-500/20 px-1.5 text-[10px] font-semibold text-violet-400">
+                {needsDisbursement}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -157,6 +296,8 @@ export function AdminDashboardClient({ orders }: { orders: AdminOrder[] }) {
           <p className="mt-4 text-gold-200/50">
             {filter === "needs_verification"
               ? "Tidak ada pembayaran yang perlu diverifikasi."
+              : filter === "needs_disbursement"
+              ? "Tidak ada dana yang perlu dicairkan."
               : "Tidak ada pesanan."}
           </p>
         </div>
@@ -300,6 +441,59 @@ export function AdminDashboardClient({ orders }: { orders: AdminOrder[] }) {
                     {order.status === "pending_payment" && (
                       <div className="mt-4 flex items-center gap-2 text-xs text-orange-400">
                         <Clock size={12} /> Menunggu pembeli upload bukti bayar
+                      </div>
+                    )}
+
+                    {/* Disbursement section for completed orders */}
+                    {order.status === "completed" && order.disbursement_status === "pending" && (
+                      <div className="mt-4 space-y-3 border-t border-gold-900/15 pt-4">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-violet-400">
+                          <Banknote size={14} /> Pencairan Dana ke Seller
+                        </div>
+                        {order.split?.creator?.bank_name ? (
+                          <div className="rounded-lg bg-surface-300/60 p-3 text-xs space-y-1.5">
+                            <div className="flex justify-between">
+                              <span className="text-gold-200/40">Bank Seller</span>
+                              <span className="font-medium text-gold-100">{order.split.creator.bank_name}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gold-200/40">No. Rekening</span>
+                              <span className="font-mono font-medium text-gold-100">{order.split.creator.bank_account_number}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gold-200/40">Atas Nama</span>
+                              <span className="font-medium text-gold-100">{order.split.creator.bank_account_name}</span>
+                            </div>
+                            <div className="flex justify-between border-t border-gold-900/10 pt-1.5">
+                              <span className="text-gold-200/40">Jumlah Transfer</span>
+                              <span className="font-semibold text-gold-400">{formatRupiah(order.total_price)}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2 rounded-lg bg-orange-500/10 p-3 text-xs text-orange-400">
+                            <AlertTriangle size={14} />
+                            Seller belum mengisi rekening bank di profil.
+                          </div>
+                        )}
+                        <button
+                          onClick={() => handleDisburse(order.id)}
+                          disabled={!!actionLoading}
+                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-500/15 py-3 text-sm font-semibold text-violet-400 transition-colors hover:bg-violet-500/25 disabled:opacity-50"
+                        >
+                          {actionLoading === order.id + "disburse" ? (
+                            <Loader2 size={16} className="animate-spin" />
+                          ) : (
+                            <Banknote size={16} />
+                          )}
+                          Tandai Sudah Dicairkan
+                        </button>
+                      </div>
+                    )}
+
+                    {order.status === "completed" && order.disbursement_status === "disbursed" && (
+                      <div className="mt-4 flex items-center gap-2 text-xs text-emerald-400">
+                        <CheckCircle2 size={12} /> Dana sudah dicairkan
+                        {order.disbursed_at && ` — ${formatDate(order.disbursed_at)}`}
                       </div>
                     )}
                   </div>

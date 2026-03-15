@@ -98,6 +98,14 @@ export interface SplitSlot {
   created_at: string;
 }
 
+export interface PlatformSettings {
+  id: number;
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_account_name: string | null;
+  updated_at: string;
+}
+
 export interface Order {
   id: string;
   user_id: string;
@@ -123,6 +131,9 @@ export interface Order {
   confirmed_at: string | null;
   shipped_at: string | null;
   completed_at: string | null;
+  // escrow
+  disbursement_status: string | null;
+  disbursed_at: string | null;
   created_at: string;
   // joined
   split?: Split & { perfume?: Perfume };
