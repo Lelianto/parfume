@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect, notFound } from "next/navigation";
 import { OrderDetailClient } from "./OrderDetailClient";
-import type { Order, Split } from "@/types/database";
+import type { Order, Split, User } from "@/types/database";
 
 export const revalidate = 0;
 
@@ -29,7 +29,7 @@ export default async function OrderDetailPage({
 
   return (
     <OrderDetailClient
-      order={order as unknown as Order & { split: Split }}
+      order={order as unknown as Order & { split: Split & { creator?: User } }}
     />
   );
 }

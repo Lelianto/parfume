@@ -16,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   Store,
+  CreditCard,
 } from "lucide-react";
 
 interface AddressOption {
@@ -43,6 +44,11 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
   const [storeProvinceId, setStoreProvinceId] = useState("");
   const [storeCities, setStoreCities] = useState<AddressOption[]>([]);
   const [storeCityId, setStoreCityId] = useState("");
+
+  // Bank account (untuk info pembayaran split)
+  const [bankName, setBankName] = useState(profile.bank_name || "");
+  const [bankAccountNumber, setBankAccountNumber] = useState(profile.bank_account_number || "");
+  const [bankAccountName, setBankAccountName] = useState(profile.bank_account_name || "");
 
   // Address fields
   const [addressName, setAddressName] = useState(profile.address_name || "");
@@ -194,6 +200,9 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
         address_detail: addressDetail.trim() || null,
         store_province: storeProvince || null,
         store_city: storeCity || null,
+        bank_name: bankName.trim() || null,
+        bank_account_number: bankAccountNumber.trim() || null,
+        bank_account_name: bankAccountName.trim() || null,
       })
       .eq("id", profile.id);
 
@@ -217,6 +226,9 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
         address_detail: addressDetail.trim() || null,
         store_province: storeProvince || null,
         store_city: storeCity || null,
+        bank_name: bankName.trim() || null,
+        bank_account_number: bankAccountNumber.trim() || null,
+        bank_account_name: bankAccountName.trim() || null,
       }));
       setTimeout(() => setSaved(false), 3000);
       router.refresh();
@@ -519,7 +531,62 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
 
       <div className="my-8 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
 
-      {/* Error / Success */}
+      {/* Bank Account */}
+      <div>
+        <div className="flex items-center gap-2">
+          <CreditCard size={16} className="text-gold-400" />
+          <h2 className="text-sm font-semibold text-gold-200/60">Rekening Bank</h2>
+        </div>
+        <p className="mt-1 text-xs text-gold-200/30">
+          Digunakan sebagai info transfer pembayaran kepada pembeli di split kamu
+        </p>
+
+        <div className="mt-3 space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gold-200/60">Nama Bank</label>
+            <input
+              type="text"
+              value={bankName}
+              onChange={(e) => setBankName(e.target.value)}
+              placeholder="Contoh: BCA, BNI, BRI, Mandiri, SeaBank"
+              className="input-dark mt-1"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gold-200/60">Nomor Rekening</label>
+            <input
+              type="text"
+              value={bankAccountNumber}
+              onChange={(e) => setBankAccountNumber(e.target.value)}
+              placeholder="Contoh: 1234567890"
+              className="input-dark mt-1 font-mono"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gold-200/60">Nama Pemilik Rekening</label>
+            <input
+              type="text"
+              value={bankAccountName}
+              onChange={(e) => setBankAccountName(e.target.value)}
+              placeholder="Nama sesuai buku tabungan"
+              className="input-dark mt-1"
+            />
+          </div>
+
+          {bankName && bankAccountNumber && bankAccountName && (
+            <div className="rounded-xl border border-gold-900/15 bg-surface-200/40 p-4">
+              <p className="mb-1 text-xs text-gold-200/30">Preview info rekening pembeli:</p>
+              <p className="text-sm font-semibold text-gold-100">{bankName}</p>
+              <p className="font-mono text-base font-bold text-gold-400">{bankAccountNumber}</p>
+              <p className="text-xs text-gold-200/40">a.n. {bankAccountName}</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="my-8 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
+
+      {/* Error / Success */
       {error && (
         <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
           {error}

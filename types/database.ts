@@ -34,6 +34,10 @@ export interface User {
   // store location
   store_province: string | null;
   store_city: string | null;
+  // bank account (untuk info transfer)
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_account_name: string | null;
   created_at: string;
 }
 
