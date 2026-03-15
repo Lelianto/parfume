@@ -19,6 +19,7 @@ import {
   ArrowLeft,
   UserCircle,
   Bookmark,
+  Wallet,
 } from "lucide-react";
 
 export function Navbar() {
@@ -65,6 +66,7 @@ export function Navbar() {
         { href: "/wishlist", label: "Wishlist", icon: Bookmark },
         { href: "/my-orders", label: "Pesanan Saya", icon: Package },
         { href: "/seller/orders", label: "Kelola Pesanan", icon: ClipboardList },
+        { href: "/seller/balance", label: "Saldo", icon: Wallet },
         { href: `/seller/${user.id}`, label: "Toko Saya", icon: Store },
         { href: "/profile", label: "Profil", icon: UserCircle },
       ]
@@ -107,6 +109,12 @@ export function Navbar() {
                   className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
                 >
                   Kelola Pesanan
+                </Link>
+                <Link
+                  href="/seller/balance"
+                  className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
+                >
+                  Saldo
                 </Link>
                 <Link
                   href={`/seller/${user.id}`}

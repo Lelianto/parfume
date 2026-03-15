@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useState, useEffect, useRef } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Concentration } from "@/types/database";
+import type { FilterState } from "./HomeListings";
 
 const CONCENTRATIONS: Concentration[] = ["EDP", "EDT", "Parfum", "EDC", "Cologne"];
 const SORT_OPTIONS = [
@@ -26,91 +26,83 @@ function formatRupiahShort(val: number) {
 
 interface SearchFilterProps {
   brands: string[];
+  filters: FilterState;
+  onFilterChange: (updates: Partial<FilterState>) => void;
+  onClearAll: () => void;
 }
 
-export function SearchFilter({ brands }: SearchFilterProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const [search, setSearch] = useState(searchParams.get("q") ?? "");
-  const currentBrand = searchParams.get("brand") ?? "";
-  const currentConcentration = searchParams.get("concentration") ?? "";
-  const currentSort = searchParams.get("sort") ?? "newest";
-  const currentScent = searchParams.get("scent") ?? "";
-  const currentPriceMin = Number(searchParams.get("price_min") ?? PRICE_MIN);
-  const currentPriceMax = Number(searchParams.get("price_max") ?? PRICE_MAX);
-
+export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: SearchFilterProps) {
+  const [search, setSearch] = useState(filters.q);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [tempBrand, setTempBrand] = useState(currentBrand);
-  const [tempConcentration, setTempConcentration] = useState(currentConcentration);
-  const [tempSort, setTempSort] = useState(currentSort);
-  const [tempScent, setTempScent] = useState(currentScent);
-  const [tempPriceMin, setTempPriceMin] = useState(currentPriceMin);
-  const [tempPriceMax, setTempPriceMax] = useState(currentPriceMax);
 
-  // Desktop price state (applies immediately on mouse up)
-  const [desktopPriceMin, setDesktopPriceMin] = useState(currentPriceMin);
-  const [desktopPriceMax, setDesktopPriceMax] = useState(currentPriceMax);
+  // Mobile temp state
+  const [tempBrand, setTempBrand] = useState(filters.brand);
+  const [tempConcentration, setTempConcentration] = useState(filters.concentration);
+  const [tempSort, setTempSort] = useState(filters.sort);
+  const [tempScent, setTempScent] = useState(filters.scent);
+  const [tempPriceMin, setTempPriceMin] = useState(Number(filters.price_min) || PRICE_MIN);
+  const [tempPriceMax, setTempPriceMax] = useState(Number(filters.price_max) || PRICE_MAX);
+
+  // Desktop price state
+  const [desktopPriceMin, setDesktopPriceMin] = useState(Number(filters.price_min) || PRICE_MIN);
+  const [desktopPriceMax, setDesktopPriceMax] = useState(Number(filters.price_max) || PRICE_MAX);
   const [showPriceFilter, setShowPriceFilter] = useState(false);
 
+  // Sync local state when parent filters change (e.g. clearAll)
+  const prevFilters = useRef(filters);
   useEffect(() => {
-    setTempBrand(currentBrand);
-    setTempConcentration(currentConcentration);
-    setTempSort(currentSort);
-    setTempScent(currentScent);
-    setTempPriceMin(currentPriceMin);
-    setTempPriceMax(currentPriceMax);
-    setDesktopPriceMin(currentPriceMin);
-    setDesktopPriceMax(currentPriceMax);
-  }, [currentBrand, currentConcentration, currentSort, currentScent, currentPriceMin, currentPriceMax]);
+    const prev = prevFilters.current;
+    if (prev !== filters) {
+      prevFilters.current = filters;
+      setSearch(filters.q);
+      setTempBrand(filters.brand);
+      setTempConcentration(filters.concentration);
+      setTempSort(filters.sort);
+      setTempScent(filters.scent);
+      setTempPriceMin(Number(filters.price_min) || PRICE_MIN);
+      setTempPriceMax(Number(filters.price_max) || PRICE_MAX);
+      setDesktopPriceMin(Number(filters.price_min) || PRICE_MIN);
+      setDesktopPriceMax(Number(filters.price_max) || PRICE_MAX);
+    }
+  }, [filters]);
 
-  const updateParams = useCallback(
-    (updates: Record<string, string>) => {
-      const params = new URLSearchParams(searchParams.toString());
-      for (const [key, value] of Object.entries(updates)) {
-        if (value) {
-          params.set(key, value);
-        } else {
-          params.delete(key);
-        }
-      }
-      router.push(`/?${params.toString()}`);
-    },
-    [router, searchParams]
-  );
-
+  // Debounce search
   useEffect(() => {
     const timer = setTimeout(() => {
-      updateParams({ q: search });
+      if (search !== filters.q) {
+        onFilterChange({ q: search });
+      }
     }, 400);
     return () => clearTimeout(timer);
-  }, [search, updateParams]);
+  }, [search, filters.q, onFilterChange]);
 
+  const currentPriceMin = Number(filters.price_min) || PRICE_MIN;
+  const currentPriceMax = Number(filters.price_max) || PRICE_MAX;
   const hasPriceFilter = currentPriceMin > PRICE_MIN || currentPriceMax < PRICE_MAX;
-  const hasFilters = search || currentBrand || currentConcentration || currentScent || currentSort !== "newest" || hasPriceFilter;
+  const hasFilters = filters.q || filters.brand || filters.concentration || filters.scent || filters.sort !== "newest" || hasPriceFilter;
   const activeFilterCount = [
-    currentBrand,
-    currentConcentration,
-    currentScent,
-    currentSort !== "newest" ? currentSort : "",
+    filters.brand,
+    filters.concentration,
+    filters.scent,
+    filters.sort !== "newest" ? filters.sort : "",
     hasPriceFilter ? "price" : "",
   ].filter(Boolean).length;
 
   function applyDesktopPrice() {
     const min = desktopPriceMin <= PRICE_MIN ? "" : String(desktopPriceMin);
     const max = desktopPriceMax >= PRICE_MAX ? "" : String(desktopPriceMax);
-    updateParams({ price_min: min, price_max: max });
+    onFilterChange({ price_min: min, price_max: max });
   }
 
-  function clearAll() {
+  function handleClearAll() {
     setSearch("");
-    router.push("/");
+    onClearAll();
   }
 
   function applyMobileFilters() {
     const min = tempPriceMin <= PRICE_MIN ? "" : String(tempPriceMin);
     const max = tempPriceMax >= PRICE_MAX ? "" : String(tempPriceMax);
-    updateParams({
+    onFilterChange({
       brand: tempBrand,
       concentration: tempConcentration,
       sort: tempSort,
@@ -204,7 +196,7 @@ export function SearchFilter({ brands }: SearchFilterProps) {
           />
           {search && (
             <button
-              onClick={() => { setSearch(""); updateParams({ q: "" }); }}
+              onClick={() => { setSearch(""); onFilterChange({ q: "" }); }}
               className="absolute right-3 top-1/2 -translate-y-1/2 rounded-md p-1 text-gold-200/30 hover:text-gold-400"
             >
               <X size={16} />
@@ -215,8 +207,8 @@ export function SearchFilter({ brands }: SearchFilterProps) {
         <div className="flex flex-wrap items-center gap-2">
           {brands.length > 0 && (
             <select
-              value={currentBrand}
-              onChange={(e) => updateParams({ brand: e.target.value })}
+              value={filters.brand}
+              onChange={(e) => onFilterChange({ brand: e.target.value })}
               className="input-dark !w-auto !rounded-lg !py-2 !pl-3 !pr-8 text-xs"
             >
               <option value="">Semua Brand</option>
@@ -229,9 +221,9 @@ export function SearchFilter({ brands }: SearchFilterProps) {
           {CONCENTRATIONS.map((c) => (
             <button
               key={c}
-              onClick={() => updateParams({ concentration: currentConcentration === c ? "" : c })}
+              onClick={() => onFilterChange({ concentration: filters.concentration === c ? "" : c })}
               className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
-                currentConcentration === c
+                filters.concentration === c
                   ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
                   : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
               }`}
@@ -243,9 +235,9 @@ export function SearchFilter({ brands }: SearchFilterProps) {
           {SCENT_FAMILIES.map((sf) => (
             <button
               key={sf}
-              onClick={() => updateParams({ scent: currentScent === sf ? "" : sf })}
+              onClick={() => onFilterChange({ scent: filters.scent === sf ? "" : sf })}
               className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
-                currentScent === sf
+                filters.scent === sf
                   ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
                   : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
               }`}
@@ -293,7 +285,7 @@ export function SearchFilter({ brands }: SearchFilterProps) {
                       onClick={() => {
                         setDesktopPriceMin(PRICE_MIN);
                         setDesktopPriceMax(PRICE_MAX);
-                        updateParams({ price_min: "", price_max: "" });
+                        onFilterChange({ price_min: "", price_max: "" });
                         setShowPriceFilter(false);
                       }}
                       className="mt-3 w-full rounded-lg py-1.5 text-[11px] text-red-400 hover:bg-red-500/10"
@@ -307,8 +299,8 @@ export function SearchFilter({ brands }: SearchFilterProps) {
           </div>
 
           <select
-            value={currentSort}
-            onChange={(e) => updateParams({ sort: e.target.value })}
+            value={filters.sort}
+            onChange={(e) => onFilterChange({ sort: e.target.value })}
             className="input-dark ml-auto !w-auto !rounded-lg !px-3 !py-2 text-xs"
           >
             {SORT_OPTIONS.map((o) => (
@@ -318,7 +310,7 @@ export function SearchFilter({ brands }: SearchFilterProps) {
 
           {hasFilters && (
             <button
-              onClick={clearAll}
+              onClick={handleClearAll}
               className="rounded-lg px-3 py-1.5 text-[11px] font-medium text-red-400 ring-1 ring-red-500/20 hover:bg-red-500/10"
             >
               Reset
@@ -341,7 +333,7 @@ export function SearchFilter({ brands }: SearchFilterProps) {
             />
             {search && (
               <button
-                onClick={() => { setSearch(""); updateParams({ q: "" }); }}
+                onClick={() => { setSearch(""); onFilterChange({ q: "" }); }}
                 className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded p-0.5 text-gold-200/30 hover:text-gold-400"
               >
                 <X size={14} />

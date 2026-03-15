@@ -6,6 +6,7 @@ import Image from "next/image";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import type { AdminOrder } from "./page";
 import type { PlatformSettings } from "@/types/database";
+import type { Withdrawal } from "@/types/database";
 import {
   ShieldCheck,
   Package,
@@ -16,9 +17,10 @@ import {
   XCircle,
   Clock,
   Banknote,
-  AlertTriangle,
   Settings,
   Save,
+  ArrowDownToLine,
+  Wallet,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 
@@ -31,29 +33,39 @@ function formatDate(dateStr: string): string {
   });
 }
 
-type Filter = "needs_verification" | "needs_disbursement" | "all" | "confirmed" | "shipped" | "completed" | "cancelled";
+type Filter = "needs_verification" | "pending_payment" | "withdrawals" | "all" | "confirmed" | "shipped" | "completed" | "cancelled";
 
-const FILTERS: { value: Filter; label: string }[] = [
-  { value: "needs_verification", label: "Perlu Verifikasi" },
-  { value: "needs_disbursement", label: "Perlu Dicairkan" },
+const ORDER_FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Semua" },
+  { value: "pending_payment", label: "Menunggu Pembayaran" },
+  { value: "needs_verification", label: "Perlu Verifikasi" },
   { value: "confirmed", label: "Dikonfirmasi" },
   { value: "shipped", label: "Dikirim" },
   { value: "completed", label: "Selesai" },
   { value: "cancelled", label: "Dibatalkan" },
 ];
 
+const FINANCE_FILTERS: { value: Filter; label: string }[] = [
+  { value: "withdrawals", label: "Penarikan Dana" },
+];
+
 export function AdminDashboardClient({
   orders,
   platformSettings: initialSettings,
+  withdrawals: initialWithdrawals,
+  trackingUsageCount,
 }: {
   orders: AdminOrder[];
   platformSettings?: PlatformSettings | null;
+  withdrawals: (Withdrawal & { user?: { name: string; email: string; avatar_url: string | null } })[];
+  trackingUsageCount: number;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<Filter>("needs_verification");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
+  const [rejectNote, setRejectNote] = useState("");
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
 
   // Platform settings form
   const [bankName, setBankName] = useState(initialSettings?.bank_name ?? "");
@@ -64,13 +76,14 @@ export function AdminDashboardClient({
 
   const filtered = orders.filter((o) => {
     if (filter === "needs_verification") return o.status === "paid";
-    if (filter === "needs_disbursement") return o.status === "completed" && o.disbursement_status === "pending";
+    if (filter === "withdrawals") return false; // handled separately
     if (filter === "all") return true;
     return o.status === filter;
   });
 
   const needsVerification = orders.filter((o) => o.status === "paid").length;
-  const needsDisbursement = orders.filter((o) => o.status === "completed" && o.disbursement_status === "pending").length;
+  const pendingPayment = orders.filter((o) => o.status === "pending_payment").length;
+  const pendingWithdrawals = initialWithdrawals.filter((w) => w.status === "pending" || w.status === "approved").length;
 
   async function handleVerify(orderId: string) {
     setActionLoading(orderId + "confirm");
@@ -121,16 +134,23 @@ export function AdminDashboardClient({
     router.refresh();
   }
 
-  async function handleDisburse(orderId: string) {
-    if (!confirm("Tandai dana sudah dicairkan ke rekening seller?")) return;
-    setActionLoading(orderId + "disburse");
+  async function handleWithdrawalAction(withdrawalId: string, action: string, adminNote?: string) {
+    const confirmMsg =
+      action === "approve" ? "Approve penarikan ini?" :
+      action === "complete" ? "Tandai dana sudah ditransfer ke seller?" :
+      action === "reject" ? "Tolak penarikan ini?" : "";
+    if (!confirm(confirmMsg)) return;
 
-    const res = await fetch(`/api/admin/orders/${orderId}/disburse`, {
-      method: "POST",
+    setActionLoading(withdrawalId + action);
+
+    const res = await fetch(`/api/admin/withdrawals/${withdrawalId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, admin_note: adminNote }),
     });
 
     if (!res.ok) {
-      let errMsg = "Gagal mencairkan";
+      let errMsg = "Gagal memproses";
       try {
         const data = await res.json();
         errMsg = data.error || errMsg;
@@ -141,6 +161,8 @@ export function AdminDashboardClient({
     }
 
     setActionLoading(null);
+    setRejectingId(null);
+    setRejectNote("");
     router.refresh();
   }
 
@@ -186,14 +208,18 @@ export function AdminDashboardClient({
       </p>
 
       {/* Stats */}
-      <div className="mt-6 grid gap-4 sm:grid-cols-4">
+      <div className="mt-6 grid gap-4 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
+          <p className="text-xs text-gold-200/40">Menunggu Pembayaran</p>
+          <p className="mt-1 font-display text-2xl font-bold text-yellow-400">{pendingPayment}</p>
+        </div>
         <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
           <p className="text-xs text-gold-200/40">Perlu Verifikasi</p>
           <p className="mt-1 font-display text-2xl font-bold text-orange-400">{needsVerification}</p>
         </div>
         <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
-          <p className="text-xs text-gold-200/40">Perlu Dicairkan</p>
-          <p className="mt-1 font-display text-2xl font-bold text-violet-400">{needsDisbursement}</p>
+          <p className="text-xs text-gold-200/40">Penarikan Pending</p>
+          <p className="mt-1 font-display text-2xl font-bold text-violet-400">{pendingWithdrawals}</p>
         </div>
         <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
           <p className="text-xs text-gold-200/40">Total Pesanan</p>
@@ -203,6 +229,14 @@ export function AdminDashboardClient({
           <p className="text-xs text-gold-200/40">Selesai</p>
           <p className="mt-1 font-display text-2xl font-bold text-emerald-400">
             {orders.filter((o) => o.status === "completed").length}
+          </p>
+        </div>
+        <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
+          <p className="text-xs text-gold-200/40">API Tracking</p>
+          <p className={`mt-1 font-display text-2xl font-bold ${
+            trackingUsageCount > 480 ? "text-red-400" : trackingUsageCount >= 400 ? "text-yellow-400" : "text-emerald-400"
+          }`}>
+            {trackingUsageCount}<span className="text-sm font-normal text-gold-200/30">/500</span>
           </p>
         </div>
       </div>
@@ -263,45 +297,197 @@ export function AdminDashboardClient({
       </div>
 
       {/* Filter tabs */}
-      <div className="mt-6 flex gap-2 overflow-x-auto pb-2">
-        {FILTERS.map((f) => (
-          <button
-            key={f.value}
-            onClick={() => setFilter(f.value)}
-            className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-              filter === f.value
-                ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
-                : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
-            }`}
-          >
-            {f.label}
-            {f.value === "needs_verification" && needsVerification > 0 && (
-              <span className="ml-1.5 rounded-full bg-orange-500/20 px-1.5 text-[10px] font-semibold text-orange-400">
-                {needsVerification}
-              </span>
-            )}
-            {f.value === "needs_disbursement" && needsDisbursement > 0 && (
-              <span className="ml-1.5 rounded-full bg-violet-500/20 px-1.5 text-[10px] font-semibold text-violet-400">
-                {needsDisbursement}
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="mt-6 space-y-3">
+        {/* Transaksi */}
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/30">Transaksi</p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {ORDER_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setFilter(f.value)}
+                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${filter === f.value
+                    ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
+                    : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
+                  }`}
+              >
+                {f.label}
+                {f.value === "pending_payment" && pendingPayment > 0 && (
+                  <span className="ml-1.5 rounded-full bg-yellow-500/20 px-1.5 text-[10px] font-semibold text-yellow-400">
+                    {pendingPayment}
+                  </span>
+                )}
+                {f.value === "needs_verification" && needsVerification > 0 && (
+                  <span className="ml-1.5 rounded-full bg-orange-500/20 px-1.5 text-[10px] font-semibold text-orange-400">
+                    {needsVerification}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Dana */}
+        <div>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/30">Dana</p>
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {FINANCE_FILTERS.map((f) => (
+              <button
+                key={f.value}
+                onClick={() => setFilter(f.value)}
+                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${filter === f.value
+                    ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
+                    : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
+                  }`}
+              >
+                {f.label}
+                {f.value === "withdrawals" && pendingWithdrawals > 0 && (
+                  <span className="ml-1.5 rounded-full bg-violet-500/20 px-1.5 text-[10px] font-semibold text-violet-400">
+                    {pendingWithdrawals}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
+      {/* Withdrawals Tab */}
+      {filter === "withdrawals" && (
+        <div className="mt-6">
+          {initialWithdrawals.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-gold-900/30 py-16 text-center">
+              <ArrowDownToLine size={48} className="mx-auto text-gold-800/30" />
+              <p className="mt-4 text-gold-200/50">Tidak ada permintaan penarikan.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {initialWithdrawals.map((w) => (
+                <div key={w.id} className="rounded-2xl border border-gold-900/20 bg-surface-200/80 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-gold-100">{w.user?.name || "Seller"}</p>
+                      <p className="text-xs text-gold-200/40">{w.user?.email}</p>
+                    </div>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${
+                      w.status === "pending" ? "bg-yellow-500/15 text-yellow-400 ring-yellow-500/30" :
+                      w.status === "approved" ? "bg-blue-500/15 text-blue-400 ring-blue-500/30" :
+                      w.status === "completed" ? "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30" :
+                      "bg-red-500/15 text-red-400 ring-red-500/30"
+                    }`}>
+                      {w.status === "pending" ? "Menunggu" : w.status === "approved" ? "Disetujui" : w.status === "completed" ? "Selesai" : "Ditolak"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 rounded-lg bg-surface-300/60 p-3 text-xs space-y-1.5">
+                    <div className="flex justify-between">
+                      <span className="text-gold-200/40">Jumlah</span>
+                      <span className="font-semibold text-gold-400">{formatRupiah(w.amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gold-200/40">Bank</span>
+                      <span className="font-medium text-gold-100">{w.bank_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gold-200/40">No. Rekening</span>
+                      <span className="font-mono font-medium text-gold-100">{w.bank_account_number}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gold-200/40">Atas Nama</span>
+                      <span className="font-medium text-gold-100">{w.bank_account_name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gold-200/40">Tanggal Request</span>
+                      <span className="text-gold-200/60">{formatDate(w.requested_at)}</span>
+                    </div>
+                  </div>
+
+                  {w.admin_note && (
+                    <div className="mt-2 rounded-lg bg-red-500/5 p-2 text-xs text-red-400">
+                      Catatan: {w.admin_note}
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  {w.status === "pending" && (
+                    <div className="mt-3 space-y-2">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleWithdrawalAction(w.id, "approve")}
+                          disabled={!!actionLoading}
+                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-blue-500/15 py-2.5 text-sm font-semibold text-blue-400 transition-colors hover:bg-blue-500/25 disabled:opacity-50"
+                        >
+                          {actionLoading === w.id + "approve" ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                          Approve
+                        </button>
+                        <button
+                          onClick={() => setRejectingId(rejectingId === w.id ? null : w.id)}
+                          disabled={!!actionLoading}
+                          className="flex items-center justify-center gap-2 rounded-xl border border-red-500/30 px-4 py-2.5 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                        >
+                          <XCircle size={14} /> Tolak
+                        </button>
+                      </div>
+                      {rejectingId === w.id && (
+                        <div className="space-y-2">
+                          <input
+                            type="text"
+                            value={rejectNote}
+                            onChange={(e) => setRejectNote(e.target.value)}
+                            placeholder="Alasan penolakan (opsional)"
+                            className="input-dark w-full text-sm"
+                          />
+                          <button
+                            onClick={() => handleWithdrawalAction(w.id, "reject", rejectNote)}
+                            disabled={!!actionLoading}
+                            className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500/15 py-2.5 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/25 disabled:opacity-50"
+                          >
+                            {actionLoading === w.id + "reject" ? <Loader2 size={14} className="animate-spin" /> : <XCircle size={14} />}
+                            Konfirmasi Tolak
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {w.status === "approved" && (
+                    <div className="mt-3">
+                      <button
+                        onClick={() => handleWithdrawalAction(w.id, "complete")}
+                        disabled={!!actionLoading}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-2.5 text-sm font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/25 disabled:opacity-50"
+                      >
+                        {actionLoading === w.id + "complete" ? <Loader2 size={14} className="animate-spin" /> : <Banknote size={14} />}
+                        Tandai Sudah Transfer
+                      </button>
+                    </div>
+                  )}
+
+                  {w.status === "completed" && w.completed_at && (
+                    <p className="mt-2 text-[11px] text-emerald-400/60">
+                      Ditransfer: {formatDate(w.completed_at)}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Orders */}
-      {filtered.length === 0 ? (
+      {filter !== "withdrawals" && filtered.length === 0 ? (
         <div className="mt-12 rounded-2xl border border-dashed border-gold-900/30 py-16 text-center">
           <Package size={48} className="mx-auto text-gold-800/30" />
           <p className="mt-4 text-gold-200/50">
             {filter === "needs_verification"
               ? "Tidak ada pembayaran yang perlu diverifikasi."
-              : filter === "needs_disbursement"
-              ? "Tidak ada dana yang perlu dicairkan."
+              : filter === "pending_payment"
+              ? "Tidak ada pesanan yang menunggu pembayaran."
               : "Tidak ada pesanan."}
           </p>
         </div>
-      ) : (
+      ) : filter !== "withdrawals" && (
         <div className="mt-6 space-y-3">
           {filtered.map((order) => {
             const isExpanded = expandedOrder === order.id;
@@ -444,55 +630,16 @@ export function AdminDashboardClient({
                       </div>
                     )}
 
-                    {/* Disbursement section for completed orders */}
-                    {order.status === "completed" && order.disbursement_status === "pending" && (
-                      <div className="mt-4 space-y-3 border-t border-gold-900/15 pt-4">
-                        <div className="flex items-center gap-2 text-xs font-semibold text-violet-400">
-                          <Banknote size={14} /> Pencairan Dana ke Seller
-                        </div>
-                        {order.split?.creator?.bank_name ? (
-                          <div className="rounded-lg bg-surface-300/60 p-3 text-xs space-y-1.5">
-                            <div className="flex justify-between">
-                              <span className="text-gold-200/40">Bank Seller</span>
-                              <span className="font-medium text-gold-100">{order.split.creator.bank_name}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gold-200/40">No. Rekening</span>
-                              <span className="font-mono font-medium text-gold-100">{order.split.creator.bank_account_number}</span>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-gold-200/40">Atas Nama</span>
-                              <span className="font-medium text-gold-100">{order.split.creator.bank_account_name}</span>
-                            </div>
-                            <div className="flex justify-between border-t border-gold-900/10 pt-1.5">
-                              <span className="text-gold-200/40">Jumlah Transfer</span>
-                              <span className="font-semibold text-gold-400">{formatRupiah(order.total_price)}</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="flex items-center gap-2 rounded-lg bg-orange-500/10 p-3 text-xs text-orange-400">
-                            <AlertTriangle size={14} />
-                            Seller belum mengisi rekening bank di profil.
-                          </div>
-                        )}
-                        <button
-                          onClick={() => handleDisburse(order.id)}
-                          disabled={!!actionLoading}
-                          className="flex w-full items-center justify-center gap-2 rounded-xl bg-violet-500/15 py-3 text-sm font-semibold text-violet-400 transition-colors hover:bg-violet-500/25 disabled:opacity-50"
-                        >
-                          {actionLoading === order.id + "disburse" ? (
-                            <Loader2 size={16} className="animate-spin" />
-                          ) : (
-                            <Banknote size={16} />
-                          )}
-                          Tandai Sudah Dicairkan
-                        </button>
+                    {/* Balance credit info for completed orders */}
+                    {order.status === "completed" && order.disbursement_status === "credited" && (
+                      <div className="mt-4 flex items-center gap-2 text-xs text-emerald-400">
+                        <Wallet size={12} /> Dana masuk ke saldo seller — {formatRupiah(order.total_price)}
                       </div>
                     )}
 
                     {order.status === "completed" && order.disbursement_status === "disbursed" && (
                       <div className="mt-4 flex items-center gap-2 text-xs text-emerald-400">
-                        <CheckCircle2 size={12} /> Dana sudah dicairkan
+                        <CheckCircle2 size={12} /> Dana sudah dicairkan (legacy)
                         {order.disbursed_at && ` — ${formatDate(order.disbursed_at)}`}
                       </div>
                     )}

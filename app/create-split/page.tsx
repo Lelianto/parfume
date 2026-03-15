@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ArrowLeft, Upload, Loader2, Video, Plus, Trash2, X, Check } from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
+import { TagInput } from "@/components/TagInput";
 import type { Concentration } from "@/types/database";
 
 interface VariantRow {
@@ -18,7 +19,7 @@ interface SplitDraft {
   step: number;
   brand: string;
   perfumeName: string;
-  perfumeVariant: string;
+  perfumeVariant: string[];
   description: string;
   concentration: string;
   bottleSize: string;
@@ -57,7 +58,7 @@ export default function CreateSplitPage() {
   // Perfume fields
   const [brand, setBrand] = useState("");
   const [perfumeName, setPerfumeName] = useState("");
-  const [perfumeVariant, setPerfumeVariant] = useState("");
+  const [perfumeVariant, setPerfumeVariant] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [concentration, setConcentration] = useState<Concentration | "">("");
 
@@ -124,7 +125,7 @@ export default function CreateSplitPage() {
     setStep(draft.step);
     setBrand(draft.brand);
     setPerfumeName(draft.perfumeName);
-    setPerfumeVariant(draft.perfumeVariant || "");
+    setPerfumeVariant(Array.isArray(draft.perfumeVariant) ? draft.perfumeVariant : draft.perfumeVariant ? [draft.perfumeVariant] : []);
     setDescription(draft.description);
     setConcentration(draft.concentration as Concentration | "");
     setBottleSize(draft.bottleSize);
@@ -411,7 +412,7 @@ export default function CreateSplitPage() {
         .insert({
           brand,
           name: perfumeName,
-          variant: perfumeVariant.trim() || null,
+          variant: perfumeVariant.length > 0 ? perfumeVariant.join(", ") : null,
           description: description || null,
           concentration: concentration || null,
           top_notes: finalTopNotes,
@@ -615,15 +616,14 @@ export default function CreateSplitPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Varian</label>
-                  <input
-                    type="text"
-                    value={perfumeVariant}
-                    onChange={(e) => setPerfumeVariant(e.target.value)}
-                    placeholder="contoh: LILAC, CHROMA, UTOPIA (opsional)"
-                    className="input-dark mt-1"
+                  <TagInput
+                    tags={perfumeVariant}
+                    onChange={setPerfumeVariant}
+                    placeholder="Ketik lalu Enter atau koma — contoh: LILAC, CHROMA"
+                    className="mt-1"
                   />
                   <p className="mt-1 text-[11px] text-gold-200/25">
-                    Varian khusus brand, jika ada. Contoh: HMNS punya LILAC, CHROMA, dll.
+                    Varian khusus brand, jika ada. Tekan Enter atau koma untuk menambah.
                   </p>
                 </div>
                 <div>

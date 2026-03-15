@@ -39,20 +39,12 @@ interface SellerOrderDetailProps {
   };
 }
 
-// Steps in order flow
+// Steps in order flow (unified for all order types)
 const ORDER_STEPS = [
   { status: "pending_payment", label: "Menunggu Bayar", icon: Clock },
   { status: "paid", label: "Sudah Bayar", icon: CheckCircle2 },
   { status: "confirmed", label: "Dikonfirmasi", icon: CheckCircle2 },
-  { status: "shipped", label: "Dikirim", icon: Truck },
-  { status: "completed", label: "Selesai", icon: Package },
-] as const;
-
-const ORDER_STEPS_DECANT = [
-  { status: "pending_payment", label: "Menunggu Bayar", icon: Clock },
-  { status: "paid", label: "Sudah Bayar", icon: CheckCircle2 },
-  { status: "confirmed", label: "Dikonfirmasi", icon: CheckCircle2 },
-  { status: "decanting", label: "Decanting", icon: FlaskConical },
+  { status: "decanting", label: "Disiapkan", icon: FlaskConical },
   { status: "shipped", label: "Dikirim", icon: Truck },
   { status: "completed", label: "Selesai", icon: Package },
 ] as const;
@@ -67,7 +59,7 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
   const split = order.split!;
   const buyer = order.user;
   const isReadyStock = split.is_ready_stock;
-  const steps = order.status === "decanting" ? ORDER_STEPS_DECANT : ORDER_STEPS;
+  const steps = ORDER_STEPS;
 
   const refreshOrder = useCallback(async () => {
     const supabase = createClient();
@@ -373,88 +365,55 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
           </div>
         )}
 
-        {/* Confirmed — input resi & ship (both ready and non-ready stock) */}
+        {/* Confirmed — seller must prepare order first */}
         {order.status === "confirmed" && (
           <div className="space-y-3">
-            <div className="flex items-center gap-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
-              <Truck size={20} className="flex-shrink-0 text-sky-400" />
+            <div className="flex items-center gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
+              <FlaskConical size={20} className="flex-shrink-0 text-indigo-400" />
               <div>
-                <p className="text-sm font-medium text-sky-400">Siap kirim</p>
+                <p className="text-sm font-medium text-indigo-400">Siapkan pesanan</p>
                 <p className="text-xs text-gold-200/40">
-                  Masukkan nomor resi pengiriman lalu klik kirim.
-                  {!isReadyStock && " Split tetap open — buyer baru masih bisa beli."}
+                  Klik tombol di bawah untuk menandai pesanan sedang disiapkan. Setelah itu kamu bisa input resi dan kirim.
                 </p>
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gold-200/60">Nomor Resi Pengiriman *</label>
-              <input
-                type="text"
-                value={shippingReceipt}
-                onChange={(e) => setShippingReceipt(e.target.value)}
-                placeholder="Contoh: JNE1234567890"
-                className="input-dark mt-1"
-              />
-            </div>
             <button
-              onClick={() => handleAction("shipped")}
+              onClick={() => handleAction("decanting")}
               disabled={!!actionLoading}
               className="btn-gold flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-surface-400"
             >
-              {actionLoading === "shipped" ? (
+              {actionLoading === "decanting" ? (
                 <Loader2 size={16} className="animate-spin" />
               ) : (
-                <Truck size={16} />
+                <FlaskConical size={16} />
               )}
-              Kirim Pesanan
+              Siapkan Pesanan
             </button>
-
-            {/* Secondary: start decant for non-ready stock */}
-            {!isReadyStock && (
-              <>
-                <div className="relative my-2 flex items-center">
-                  <div className="flex-1 border-t border-gold-900/15" />
-                  <span className="px-3 text-xs text-gold-200/30">atau</span>
-                  <div className="flex-1 border-t border-gold-900/15" />
-                </div>
-                <div className="flex items-center gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
-                  <FlaskConical size={20} className="flex-shrink-0 text-indigo-400" />
-                  <div>
-                    <p className="text-sm font-medium text-indigo-400">Bulk decant</p>
-                    <p className="text-xs text-gold-200/40">
-                      Mulai proses decant untuk semua order sekaligus. Split akan ditutup dari pembelian baru.
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleAction("decanting")}
-                  disabled={!!actionLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 py-3.5 text-sm font-semibold text-indigo-400 transition-colors hover:bg-indigo-500/20"
-                >
-                  {actionLoading === "decanting" ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <FlaskConical size={16} />
-                  )}
-                  Mulai Proses Decant
-                </button>
-              </>
-            )}
           </div>
         )}
 
-        {/* Decanting — input resi & ship */}
+        {/* Decanting (Sedang Disiapkan) — input resi & ship */}
         {order.status === "decanting" && (
           <div className="space-y-3">
             <div className="flex items-center gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
               <Truck size={20} className="flex-shrink-0 text-violet-400" />
               <div>
-                <p className="text-sm font-medium text-violet-400">Decant selesai? Kirim pesanan</p>
+                <p className="text-sm font-medium text-violet-400">Pesanan siap? Kirim sekarang</p>
                 <p className="text-xs text-gold-200/40">
                   Masukkan nomor resi pengiriman lalu klik kirim.
                 </p>
               </div>
             </div>
+            {/* Show buyer's chosen courier */}
+            {order.shipping_courier && order.shipping_service && (
+              <div className="rounded-lg bg-surface-300/60 px-4 py-3">
+                <p className="text-xs text-gold-200/40">Kurir dipilih pembeli</p>
+                <p className="mt-0.5 text-sm font-medium text-gold-100">{order.shipping_service}</p>
+                {order.shipping_cost > 0 && (
+                  <p className="text-xs text-gold-200/40">Ongkir: {formatRupiah(order.shipping_cost)}</p>
+                )}
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gold-200/60">Nomor Resi Pengiriman *</label>
               <input
@@ -504,14 +463,17 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
               </div>
             </div>
 
-            {/* Disbursement status */}
-            {order.disbursement_status === "pending" && (
-              <div className="flex items-center gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
-                <Banknote size={20} className="flex-shrink-0 text-violet-400" />
+            {/* Balance credit status */}
+            {(order.disbursement_status === "credited" || order.disbursement_status === "pending") && (
+              <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                <Banknote size={20} className="flex-shrink-0 text-emerald-400" />
                 <div>
-                  <p className="text-sm font-medium text-violet-400">Dana belum dicairkan</p>
+                  <p className="text-sm font-medium text-emerald-400">Dana masuk ke saldo</p>
                   <p className="text-xs text-gold-200/40">
-                    Admin akan mentransfer dana ke rekening kamu. Pastikan info rekening di profil sudah benar.
+                    {formatRupiah(order.total_price)} telah ditambahkan ke saldo kamu.{" "}
+                    <Link href="/seller/balance" className="text-gold-400 underline">
+                      Lihat saldo & tarik dana →
+                    </Link>
                   </p>
                 </div>
               </div>

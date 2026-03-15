@@ -17,7 +17,7 @@ export async function PATCH(
   }
 
   const body = await request.json();
-  const { status: newStatus, shipping_receipt } = body;
+  const { status: newStatus, shipping_receipt, shipping_courier } = body;
 
   // Fetch order with split
   const { data: order } = await supabase
@@ -26,7 +26,7 @@ export async function PATCH(
     .eq("id", orderId)
     .single();
 
-  if (!order) {
+  if (!order || !order.split) {
     return NextResponse.json({ error: "Order tidak ditemukan" }, { status: 404 });
   }
 
@@ -46,22 +46,13 @@ export async function PATCH(
       { status: 403 }
     );
   } else if (currentStatus === "confirmed" && newStatus === "decanting") {
-    // Non-ready stock only
-    if (order.split.is_ready_stock) {
-      return NextResponse.json({ error: "Ready stock tidak perlu proses decant" }, { status: 400 });
-    }
-  } else if (currentStatus === "confirmed" && newStatus === "shipped") {
-    if (!shipping_receipt) {
-      return NextResponse.json({ error: "Nomor resi wajib diisi" }, { status: 400 });
-    }
-    updateData.shipping_receipt = shipping_receipt;
-    updateData.shipped_at = new Date().toISOString();
-    updateData.shipping_deadline = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+    // All orders must go through decanting (preparation) step
   } else if (currentStatus === "decanting" && newStatus === "shipped") {
     if (!shipping_receipt) {
       return NextResponse.json({ error: "Nomor resi wajib diisi" }, { status: 400 });
     }
     updateData.shipping_receipt = shipping_receipt;
+    if (shipping_courier) updateData.shipping_courier = shipping_courier;
     updateData.shipped_at = new Date().toISOString();
     updateData.shipping_deadline = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
   } else {

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { OrderStatusBadge } from "@/components/StatusBadge";
+import { MiniOrderProgress } from "@/components/MiniOrderProgress";
 import { Package, Droplets, Clock } from "lucide-react";
 import type { Order } from "@/types/database";
 import { formatRupiah } from "@/lib/utils";
@@ -83,6 +84,9 @@ export default async function MyOrdersPage() {
                       {order.slots_purchased > 1 && order.size_ml ? ` × ${order.slots_purchased}` : ""}
                     </span>
                     <span className="font-medium text-gold-400">{formatRupiah(order.total_price)}</span>
+                  </div>
+                  <div className="mt-2">
+                    <MiniOrderProgress status={order.status} />
                   </div>
                   {order.status === "pending_payment" && order.payment_deadline && (
                     <div className="mt-1 flex items-center gap-1 text-xs text-orange-400">

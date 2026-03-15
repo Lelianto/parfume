@@ -21,8 +21,8 @@ const STEPS: { status: OrderStatus[]; label: string; desc: string }[] = [
   },
   {
     status: ["decanting"],
-    label: "Proses Decant",
-    desc: "Seller sedang mem-filling parfum ke botol kecil",
+    label: "Sedang Disiapkan",
+    desc: "Seller sedang menyiapkan pesanan kamu",
   },
   {
     status: ["shipped"],

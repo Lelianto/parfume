@@ -1,14 +1,16 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { OrderTimeline } from "@/components/OrderTimeline";
-import { getTrackingInfo } from "@/lib/tracking";
+import { getTrackingInfo, isInAppTrackingAvailable, detectCourier } from "@/lib/tracking";
 import { formatRupiah } from "@/lib/utils";
-import type { Order, Split, User, PlatformSettings } from "@/types/database";
+import type { Order, Split, User, PlatformSettings, BinderByteTrackingResult } from "@/types/database";
+import { TrackingTimeline } from "@/components/TrackingTimeline";
 import {
   ArrowLeft,
   Upload,
@@ -26,6 +28,15 @@ import {
   Check,
   ExternalLink,
 } from "lucide-react";
+
+interface ShippingCostOption {
+  code: string;
+  name: string;
+  service: string;
+  type: string;
+  price: number;
+  estimated: string;
+}
 
 function useCountdown(deadline: string | null) {
   const [timeLeft, setTimeLeft] = useState("");
@@ -97,10 +108,23 @@ export function OrderDetailClient({
   order: OrderWithSplit;
   platformSettings?: PlatformSettings | null;
 }) {
+  const router = useRouter();
   const [order, setOrder] = useState(initialOrder);
   const [uploading, setUploading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
+  const [trackingData, setTrackingData] = useState<{ data: BinderByteTrackingResult; cached: boolean; fetched_at: string } | null>(null);
+  const [trackingLoading, setTrackingLoading] = useState(false);
+  const [trackingError, setTrackingError] = useState("");
+  // Ongkir state
+  const [shippingCosts, setShippingCosts] = useState<ShippingCostOption[]>([]);
+  const [ongkirLoading, setOngkirLoading] = useState(false);
+  const [ongkirError, setOngkirError] = useState("");
+  const [selectedShipping, setSelectedShipping] = useState<ShippingCostOption | null>(null);
+  const [savingShipping, setSavingShipping] = useState(false);
+  // If order already has shipping_courier chosen, it's locked in
+  const shippingChosen = !!(order.shipping_courier && order.shipping_cost > 0);
+  const totalToPay = order.total_price + (shippingChosen ? order.shipping_cost : (selectedShipping?.price ?? 0));
   const { timeLeft, expired } = useCountdown(
     order.status === "pending_payment" ? order.payment_deadline : null
   );
@@ -110,6 +134,73 @@ export function OrderDetailClient({
   const trackingInfo = order.shipping_receipt
     ? getTrackingInfo(order.shipping_receipt)
     : null;
+
+  // Determine courier for in-app tracking
+  const courierCode = order.shipping_courier || (order.shipping_receipt ? detectCourier(order.shipping_receipt) : null);
+  const canTrackInApp = isInAppTrackingAvailable(courierCode);
+
+  async function handleCekResi() {
+    if (!order.shipping_receipt) return;
+    setTrackingLoading(true);
+    setTrackingError("");
+
+    const courierQuery = courierCode ? `?courier=${courierCode}` : "";
+    const res = await fetch(`/api/tracking/${encodeURIComponent(order.shipping_receipt)}${courierQuery}`);
+    const result = await res.json();
+
+    if (!res.ok) {
+      setTrackingError(result.error || "Gagal mengambil data tracking");
+      setTrackingLoading(false);
+      return;
+    }
+
+    setTrackingData(result);
+    setTrackingLoading(false);
+  }
+
+  async function handleFetchOngkir() {
+    setOngkirLoading(true);
+    setOngkirError("");
+
+    const res = await fetch(`/api/orders/${order.id}/shipping-cost`);
+    const result = await res.json();
+
+    if (!res.ok) {
+      setOngkirError(result.error || "Gagal mengambil data ongkir");
+      setOngkirLoading(false);
+      return;
+    }
+
+    setShippingCosts(result.costs ?? []);
+    setOngkirLoading(false);
+  }
+
+  async function handleSaveShippingChoice() {
+    if (!selectedShipping) return;
+    setSavingShipping(true);
+    setError("");
+
+    const res = await fetch(`/api/orders/${order.id}/shipping-choice`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        shipping_courier: selectedShipping.code,
+        shipping_service: `${selectedShipping.name} ${selectedShipping.service}`,
+        shipping_cost: selectedShipping.price,
+      }),
+    });
+
+    const result = await res.json();
+
+    if (!res.ok) {
+      setError(result.error || "Gagal menyimpan pilihan kurir");
+      setSavingShipping(false);
+      return;
+    }
+
+    setSavingShipping(false);
+    await refreshOrder();
+  }
 
   const refreshOrder = useCallback(async () => {
     const supabase = createClient();
@@ -142,7 +233,7 @@ export function OrderDetailClient({
     }
 
     setUploading(false);
-    await refreshOrder();
+    router.push("/my-orders");
   }
 
   async function handleConfirmReceived() {
@@ -162,7 +253,7 @@ export function OrderDetailClient({
     }
 
     setConfirming(false);
-    await refreshOrder();
+    router.push("/my-orders");
   }
 
   // WhatsApp link ke seller dengan pesan otomatis
@@ -246,11 +337,101 @@ export function OrderDetailClient({
             </div>
           </div>
 
-          {/* Bank Info — Transfer ke rekening Wangiverse (escrow) */}
+          {/* ── Step 1: Pilih Kurir & Ongkir ── */}
+          <div className="rounded-xl border border-gold-900/20 bg-surface-200/80 p-5">
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
+              {shippingChosen ? "Kurir Dipilih" : "1. Pilih Kurir Pengiriman"}
+            </p>
+
+            {shippingChosen ? (
+              /* Already chosen — show summary */
+              <div className="flex items-center justify-between rounded-lg bg-surface-300/60 px-4 py-3">
+                <div>
+                  <p className="text-sm font-medium text-gold-100">{order.shipping_service}</p>
+                  <p className="text-xs text-gold-200/40">Ongkir sudah dikunci</p>
+                </div>
+                <p className="font-semibold text-gold-400">{formatRupiah(order.shipping_cost)}</p>
+              </div>
+            ) : (
+              /* Not chosen yet */
+              <div className="space-y-3">
+                {shippingCosts.length === 0 ? (
+                  /* Fetch button */
+                  <button
+                    onClick={handleFetchOngkir}
+                    disabled={ongkirLoading || expired}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10 disabled:opacity-50"
+                  >
+                    {ongkirLoading ? (
+                      <Loader2 size={16} className="animate-spin" />
+                    ) : (
+                      <Truck size={16} />
+                    )}
+                    {ongkirLoading ? "Memuat ongkir..." : "Lihat Pilihan Kurir & Ongkir"}
+                  </button>
+                ) : (
+                  /* Courier options list */
+                  <>
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {shippingCosts.map((cost, i) => {
+                        const isSelected = selectedShipping?.code === cost.code && selectedShipping?.service === cost.service;
+                        return (
+                          <button
+                            key={`${cost.code}-${cost.service}-${i}`}
+                            onClick={() => setSelectedShipping(cost)}
+                            className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-all ${
+                              isSelected
+                                ? "border border-gold-500/50 bg-gold-400/10 ring-1 ring-gold-400/30"
+                                : "border border-gold-900/15 bg-surface-300/50 hover:border-gold-700/30"
+                            }`}
+                          >
+                            <div>
+                              <p className={`text-sm font-medium ${isSelected ? "text-gold-100" : "text-gold-200/70"}`}>
+                                {cost.name} {cost.service}
+                              </p>
+                              <p className="text-[11px] text-gold-200/30">
+                                {cost.estimated} &middot; {cost.type}
+                              </p>
+                            </div>
+                            <p className={`text-sm font-semibold ${isSelected ? "text-gold-400" : "text-gold-200/50"}`}>
+                              {formatRupiah(cost.price)}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {selectedShipping && (
+                      <button
+                        onClick={handleSaveShippingChoice}
+                        disabled={savingShipping}
+                        className="btn-gold flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-surface-400"
+                      >
+                        {savingShipping ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Check size={16} />
+                        )}
+                        {savingShipping ? "Menyimpan..." : `Pilih ${selectedShipping.name} ${selectedShipping.service}`}
+                      </button>
+                    )}
+                  </>
+                )}
+
+                {ongkirError && (
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                    {ongkirError}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* ── Step 2: Bank Info — Transfer ke rekening Wangiverse (escrow) ── */}
           {platformSettings?.bank_name ? (
-            <div className="rounded-xl border border-gold-900/20 bg-surface-200/80 p-5">
+            <div className={`rounded-xl border border-gold-900/20 bg-surface-200/80 p-5 ${!shippingChosen ? "opacity-50 pointer-events-none" : ""}`}>
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
-                Transfer ke Rekening Wangiverse
+                {shippingChosen ? "2. Transfer ke Rekening Wangiverse" : "2. Transfer (pilih kurir dulu)"}
               </p>
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -269,14 +450,27 @@ export function OrderDetailClient({
                   </div>
                   <CopyButton text={platformSettings.bank_account_number ?? ""} />
                 </div>
-                <div className="flex items-center justify-between rounded-lg border border-gold-700/20 bg-gold-400/5 px-4 py-3">
-                  <div>
-                    <p className="text-xs text-gold-200/40">Jumlah Transfer</p>
-                    <p className="font-display text-xl font-bold text-gold-400">
-                      {formatRupiah(order.total_price)}
-                    </p>
+
+                {/* Price breakdown */}
+                <div className="space-y-2 rounded-lg border border-gold-700/20 bg-gold-400/5 px-4 py-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gold-200/40">Harga produk</span>
+                    <span className="text-gold-200/60">{formatRupiah(order.total_price)}</span>
                   </div>
-                  <CopyButton text={String(order.total_price)} />
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gold-200/40">Ongkir ({order.shipping_service || "-"})</span>
+                    <span className="text-gold-200/60">{formatRupiah(order.shipping_cost)}</span>
+                  </div>
+                  <div className="h-px bg-gold-700/20" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold text-gold-200/50">Total Transfer</span>
+                    <span className="font-display text-xl font-bold text-gold-400">
+                      {formatRupiah(totalToPay)}
+                    </span>
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <CopyButton text={String(totalToPay)} />
                 </div>
               </div>
             </div>
@@ -302,11 +496,11 @@ export function OrderDetailClient({
             </div>
           )}
 
-          {/* Upload Bukti Bayar */}
+          {/* ── Step 3: Upload Bukti Bayar ── */}
           {!expired && (
-            <div>
+            <div className={!shippingChosen ? "opacity-50 pointer-events-none" : ""}>
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
-                Upload Bukti Transfer
+                {shippingChosen ? "3. Upload Bukti Transfer" : "3. Upload (pilih kurir dulu)"}
               </p>
               <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gold-900/40 bg-surface-200/50 p-8 transition-colors hover:border-gold-700/50 hover:bg-surface-200">
                 {uploading ? (
@@ -325,7 +519,7 @@ export function OrderDetailClient({
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   className="hidden"
-                  disabled={uploading}
+                  disabled={uploading || !shippingChosen}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (file) handleUploadPaymentProof(file);
@@ -370,9 +564,7 @@ export function OrderDetailClient({
           <div>
             <p className="text-sm font-semibold text-sky-300">Pembayaran dikonfirmasi</p>
             <p className="mt-0.5 text-xs text-gold-200/40">
-              {split.is_ready_stock
-                ? "Seller akan segera memproses dan mengirim pesanan kamu."
-                : "Menunggu semua slot terisi, lalu seller akan mulai proses decant."}
+              Menunggu seller menyiapkan pesanan kamu.
             </p>
           </div>
         </div>
@@ -383,9 +575,9 @@ export function OrderDetailClient({
         <div className="flex items-start gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
           <FlaskConical size={20} className="mt-0.5 flex-shrink-0 text-indigo-400" />
           <div>
-            <p className="text-sm font-semibold text-indigo-300">Sedang proses decant</p>
+            <p className="text-sm font-semibold text-indigo-300">Sedang Disiapkan</p>
             <p className="mt-0.5 text-xs text-gold-200/40">
-              Seller sedang mem-filling parfum ke botol kecil. Pesanan akan segera dikirim setelah selesai.
+              Seller sedang menyiapkan pesanan kamu. Pesanan akan segera dikirim setelah selesai.
             </p>
           </div>
         </div>
@@ -433,6 +625,40 @@ export function OrderDetailClient({
             )}
           </div>
 
+          {/* In-app tracking */}
+          {canTrackInApp && order.shipping_receipt && (
+            <div className="space-y-3">
+              {!trackingData && (
+                <button
+                  onClick={handleCekResi}
+                  disabled={trackingLoading}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+                >
+                  {trackingLoading ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Truck size={16} />
+                  )}
+                  {trackingLoading ? "Memuat..." : "Cek Resi"}
+                </button>
+              )}
+              {trackingError && (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                  {trackingError}
+                </div>
+              )}
+              {trackingData && (
+                <div className="rounded-2xl border border-gold-900/20 bg-surface-200/50 p-5">
+                  <TrackingTimeline
+                    result={trackingData.data}
+                    fetchedAt={trackingData.fetched_at}
+                    cached={trackingData.cached}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <button
             onClick={handleConfirmReceived}
             disabled={confirming}
@@ -463,6 +689,41 @@ export function OrderDetailClient({
               </p>
             </div>
           </div>
+
+          {/* In-app tracking for completed orders */}
+          {canTrackInApp && order.shipping_receipt && (
+            <>
+              {!trackingData && (
+                <button
+                  onClick={handleCekResi}
+                  disabled={trackingLoading}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+                >
+                  {trackingLoading ? (
+                    <Loader2 size={16} className="animate-spin" />
+                  ) : (
+                    <Truck size={16} />
+                  )}
+                  {trackingLoading ? "Memuat..." : "Cek Resi"}
+                </button>
+              )}
+              {trackingError && (
+                <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                  {trackingError}
+                </div>
+              )}
+              {trackingData && (
+                <div className="rounded-2xl border border-gold-900/20 bg-surface-200/50 p-5">
+                  <TrackingTimeline
+                    result={trackingData.data}
+                    fetchedAt={trackingData.fetched_at}
+                    cached={trackingData.cached}
+                  />
+                </div>
+              )}
+            </>
+          )}
+
           <Link
             href={`/split/${order.split_id}`}
             className="flex items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"

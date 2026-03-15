@@ -116,6 +116,9 @@ export interface Order {
   total_price: number;
   status: OrderStatus;
   shipping_receipt: string | null;
+  shipping_courier: string | null;
+  shipping_service: string | null;
+  shipping_cost: number;
   payment_proof_url: string | null;
   payment_deadline: string | null;
   shipping_deadline: string | null;
@@ -157,4 +160,70 @@ export interface Wishlist {
   split_id: string;
   created_at: string;
   split?: Split & { perfume?: Perfume; variants?: SplitVariant[] };
+}
+
+// Tracking
+export interface TrackingCache {
+  id: string;
+  awb: string;
+  courier: string;
+  result: BinderByteTrackingResult;
+  fetched_at: string;
+}
+
+export interface ApiUsage {
+  month: string;
+  api_type: string; // 'tracking' | 'ongkir'
+  request_count: number;
+}
+
+export interface BinderByteTrackingResult {
+  summary: {
+    awb: string;
+    courier: string;
+    service: string;
+    status: string;
+    date: string;
+    desc: string;
+    amount: string;
+    weight: string;
+  };
+  detail: {
+    origin: string;
+    destination: string;
+    shipper: string;
+    receiver: string;
+  };
+  history: Array<{
+    date: string;
+    desc: string;
+    location: string;
+  }>;
+}
+
+// Seller Balance & Withdrawal
+export type WithdrawalStatus = "pending" | "approved" | "rejected" | "completed";
+
+export interface SellerBalance {
+  user_id: string;
+  balance: number;
+  total_earned: number;
+  total_withdrawn: number;
+  updated_at: string;
+}
+
+export interface Withdrawal {
+  id: string;
+  user_id: string;
+  amount: number;
+  status: WithdrawalStatus;
+  bank_name: string;
+  bank_account_number: string;
+  bank_account_name: string;
+  admin_note: string | null;
+  requested_at: string;
+  processed_at: string | null;
+  completed_at: string | null;
+  // joined
+  user?: User;
 }

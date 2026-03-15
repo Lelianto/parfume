@@ -1,66 +1,22 @@
 import { createClient } from "@/lib/supabase/server";
-import { SearchFilter } from "@/components/SearchFilter";
-import { SplitGrid } from "@/components/SplitGrid";
+import { HomeListings } from "@/components/HomeListings";
 import { Droplets, Shield, Users, Truck } from "lucide-react";
 import type { Split } from "@/types/database";
 import { Suspense } from "react";
 
 export const revalidate = 0;
 
-export default async function HomePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ [key: string]: string | undefined }>;
-}) {
-  const params = await searchParams;
+export default async function HomePage() {
   const supabase = await createClient();
 
-  // Build query
-  let query = supabase
+  // Fetch all splits (initial load — no filters)
+  const { data: splits } = await supabase
     .from("splits")
-    .select("*, perfume:perfumes(*), variants:split_variants(*), reviews:reviews(rating)");
+    .select("*, perfume:perfumes(*), variants:split_variants(*), reviews:reviews(rating)")
+    .order("created_at", { ascending: false });
 
-  // Search filter — sanitize to prevent PostgREST filter injection
-  if (params.q) {
-    const safeQ = params.q.replace(/[%_,.()"'\\]/g, "");
-    if (safeQ) {
-      query = query.or(
-        `brand.ilike.%${safeQ}%,name.ilike.%${safeQ}%`,
-        { referencedTable: "perfumes" }
-      );
-    }
-  }
-
-  // Price filter — validate numeric
-  const priceMin = Number(params.price_min);
-  if (params.price_min && !isNaN(priceMin)) {
-    query = query.gte("price_per_slot", priceMin);
-  }
-  const priceMax = Number(params.price_max);
-  if (params.price_max && !isNaN(priceMax)) {
-    query = query.lte("price_per_slot", priceMax);
-  }
-
-  // Sort
-  if (params.sort === "price_asc") {
-    query = query.order("price_per_slot", { ascending: true });
-  } else if (params.sort === "price_desc") {
-    query = query.order("price_per_slot", { ascending: false });
-  } else {
-    query = query.order("created_at", { ascending: false });
-  }
-
-  const { data: splits } = await query;
-
-  // Filter out hidden splits + apply brand/concentration/scent filters in-memory
-  // (PostgREST .eq() on joined table columns is silently ignored)
   const activeSplits = ((splits ?? []) as unknown as Split[]).filter(
-    (s) =>
-      s.perfume &&
-      !s.is_hidden &&
-      (!params.brand || s.perfume.brand === params.brand) &&
-      (!params.concentration || s.perfume.concentration === params.concentration) &&
-      (!params.scent || s.perfume.scent_family === params.scent)
+    (s) => s.perfume && !s.is_hidden
   );
 
   // Get distinct brands for filter dropdown
@@ -223,13 +179,14 @@ export default async function HomePage({
           Produk Tersedia
         </h2>
 
-        <div className="mt-4 sm:mt-6">
-          <Suspense fallback={null}>
-            <SearchFilter brands={brands} />
-          </Suspense>
-        </div>
-
-        <SplitGrid splits={splitsWithRating} isLoggedIn={!!user} wishlistedIds={wishlistedIds} />
+        <Suspense fallback={null}>
+          <HomeListings
+            initialSplits={splitsWithRating}
+            brands={brands}
+            isLoggedIn={!!user}
+            wishlistedIds={wishlistedIds}
+          />
+        </Suspense>
       </section>
     </div>
   );

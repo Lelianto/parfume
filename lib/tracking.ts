@@ -1,3 +1,30 @@
+// All couriers supported by BinderByte API
+export const BINDERBYTE_COURIERS: Record<string, string> = {
+  jne: "JNE",
+  pos: "Pos Indonesia",
+  jnt: "J&T Express",
+  jnt_cargo: "J&T Cargo",
+  sicepat: "SiCepat",
+  tiki: "TIKI",
+  anteraja: "AnterAja",
+  wahana: "Wahana",
+  ninja: "Ninja Xpress",
+  lion: "Lion Parcel",
+  pcp: "PCP Express",
+  jet: "JET Express",
+  rex: "REX Express",
+  first: "First Logistics",
+  ide: "ID Express",
+  spx: "Shopee Express",
+  kgx: "KGX",
+  sap: "SAP Express",
+  rpx: "RPX",
+  lex: "Lazada Express",
+  indah_cargo: "Indah Cargo",
+  dakota: "Dakota Cargo",
+  kurir_tokopedia: "Kurir Tokopedia",
+};
+
 // Mapping ekspedisi ke URL tracking mereka
 const COURIER_TRACKING: Record<string, { name: string; url: (resi: string) => string }> = {
   jne: {
@@ -35,7 +62,7 @@ const COURIER_TRACKING: Record<string, { name: string; url: (resi: string) => st
 };
 
 // Deteksi otomatis ekspedisi dari format nomor resi
-function detectCourier(resi: string): string | null {
+export function detectCourier(resi: string): string | null {
   const r = resi.toUpperCase().trim();
 
   if (/^(JNE|JTR|MJL)/.test(r)) return "jne";
@@ -49,9 +76,14 @@ function detectCourier(resi: string): string | null {
   return null;
 }
 
+export function isInAppTrackingAvailable(courier: string | null): boolean {
+  if (!courier) return false;
+  return courier in BINDERBYTE_COURIERS;
+}
+
 export function getTrackingUrl(resi: string): string | null {
   const courier = detectCourier(resi);
-  if (!courier) return null;
+  if (!courier || !COURIER_TRACKING[courier]) return null;
   return COURIER_TRACKING[courier].url(resi);
 }
 
@@ -60,7 +92,7 @@ export function getTrackingInfo(resi: string): {
   courierName: string;
 } | null {
   const courier = detectCourier(resi);
-  if (!courier) return null;
+  if (!courier || !COURIER_TRACKING[courier]) return null;
   return {
     url: COURIER_TRACKING[courier].url(resi),
     courierName: COURIER_TRACKING[courier].name,
