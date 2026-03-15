@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 const ALLOWED_COURIERS = new Set([
-  "jne", "sicepat", "anteraja", "lion", "sap", "pos", "ide", "tiki",
+  "jne", "jnt", "sicepat", "anteraja", "lion", "sap", "pos", "ide", "tiki", "ninja",
 ]);
 
 export async function PATCH(

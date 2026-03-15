@@ -1,8 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
+import { calculateCost, findDestinationId } from "@/lib/rajaongkir";
 
-const ONGKIR_COURIERS = ["jne", "sicepat", "anteraja", "lion", "sap", "pos", "ide", "tiki"];
-const MONTHLY_QUOTA = 480;
+const COURIERS = "jne:jnt:sicepat:anteraja:pos"; // colon-separated, 1 API call
+const MONTHLY_QUOTA = 500;
 
 export async function GET(
   _request: Request,
@@ -19,10 +20,14 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Fetch order with split → creator (seller)
+  // Fetch order with seller info
   const { data: order } = await supabase
     .from("orders")
-    .select("status, shipping_city, split:splits(creator:users!splits_created_by_fkey(store_city))")
+    .select(
+      `status,
+       shipping_city, shipping_district, shipping_village, shipping_city_id,
+       split:splits(creator:users!splits_created_by_fkey(store_city, store_city_id))`
+    )
     .eq("id", orderId)
     .eq("user_id", user.id)
     .single();
@@ -31,7 +36,6 @@ export async function GET(
     return NextResponse.json({ error: "Order tidak ditemukan" }, { status: 404 });
   }
 
-  // Only allow during pending_payment
   if (order.status !== "pending_payment") {
     return NextResponse.json(
       { error: "Cek ongkir hanya tersedia saat menunggu pembayaran" },
@@ -39,82 +43,106 @@ export async function GET(
     );
   }
 
-  // Origin = seller's store_city, Destination = buyer's shipping_city
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const splitData = order.split as any;
-  const origin: string | null = splitData?.creator?.store_city ?? null;
-  const destination = order.shipping_city;
+  const sellerCity: string | null = splitData?.creator?.store_city ?? null;
+  const buyerCity = order.shipping_city;
 
-  if (!origin) {
+  if (!sellerCity) {
     return NextResponse.json(
       { error: "Kota asal belum tersedia. Hubungi seller." },
       { status: 400 }
     );
   }
 
-  if (!destination) {
+  if (!buyerCity) {
     return NextResponse.json(
       { error: "Alamat pengiriman belum lengkap." },
       { status: 400 }
     );
   }
 
-  const apiKey = process.env.BINDERBYTE_API_KEY;
-  if (!apiKey) {
+  if (!process.env.RAJAONGKIR_API_KEY) {
     return NextResponse.json(
       { error: "Shipping cost API belum dikonfigurasi" },
       { status: 500 }
     );
   }
 
-  // Atomic quota reservation
+  // Resolve RajaOngkir destination IDs (subdistrict-level)
+  let originId: number | null = splitData?.creator?.store_city_id ?? null;
+  let destinationId: number | null = order.shipping_city_id ?? null;
+
+  // Fallback: lookup via search API if IDs not stored
+  if (!originId) {
+    originId = await findDestinationId("", "", sellerCity, supabase);
+  }
+  if (!destinationId) {
+    destinationId = await findDestinationId(
+      order.shipping_village ?? "",
+      order.shipping_district ?? "",
+      buyerCity,
+      supabase
+    );
+  }
+
+  if (!originId) {
+    return NextResponse.json(
+      { error: `Kota asal "${sellerCity}" tidak ditemukan di RajaOngkir. Minta seller update profil.` },
+      { status: 400 }
+    );
+  }
+
+  if (!destinationId) {
+    return NextResponse.json(
+      { error: `Kota tujuan "${buyerCity}" tidak ditemukan di RajaOngkir. Update alamat di profil.` },
+      { status: 400 }
+    );
+  }
+
+  // Try quota reservation (don't block if RPC fails)
   const { error: quotaError } = await supabase.rpc("reserve_api_quota", {
     p_api_type: "ongkir",
     p_limit: MONTHLY_QUOTA,
   });
 
   if (quotaError) {
-    return NextResponse.json(
-      { error: "Kuota cek ongkir bulan ini sudah habis. Hubungi admin." },
-      { status: 429 }
-    );
+    const isQuotaExceeded = quotaError.message?.includes("quota exceeded");
+    if (isQuotaExceeded) {
+      return NextResponse.json(
+        { error: "Kuota cek ongkir bulan ini sudah habis. Hubungi admin." },
+        { status: 429 }
+      );
+    }
+    console.error("reserve_api_quota RPC error (ongkir):", quotaError.message);
   }
 
-  // Default weight 1kg (minimum charge, perfume decants are small)
-  const weight = 1;
+  const weight = 1000; // 1kg in grams (RajaOngkir v2 uses grams)
 
-  const apiUrl = `https://api.binderbyte.com/v1/cost?api_key=${encodeURIComponent(apiKey)}&courier=${ONGKIR_COURIERS.join(",")}&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&weight=${weight}`;
+  // Single API call with all couriers (colon-separated)
+  const costItems = await calculateCost(originId, destinationId, weight, COURIERS);
 
-  let apiResponse: Response;
-  try {
-    apiResponse = await fetch(apiUrl, { next: { revalidate: 0 } });
-  } catch {
+  if (costItems.length === 0) {
     return NextResponse.json(
-      { error: "Gagal menghubungi layanan ongkir" },
-      { status: 502 }
-    );
-  }
-
-  if (!apiResponse.ok) {
-    return NextResponse.json(
-      { error: "Layanan ongkir sedang tidak tersedia" },
-      { status: 502 }
-    );
-  }
-
-  const apiData = await apiResponse.json();
-
-  if (apiData.status !== 200) {
-    return NextResponse.json(
-      { error: apiData.message || "Gagal mengambil data ongkir" },
+      { error: "Tidak ada layanan kurir yang tersedia untuk rute ini" },
       { status: 400 }
     );
   }
 
+  // Map to existing UI format
+  const costs = costItems.map((item) => ({
+    code: item.code,
+    name: item.name,
+    service: item.service,
+    type: item.description,
+    price: item.cost,
+    estimated: item.etd,
+  }));
+
   return NextResponse.json({
-    origin,
-    destination,
-    weight,
-    costs: apiData.data?.costs ?? [],
+    origin: sellerCity,
+    destination: buyerCity,
+    weight: 1,
+    costs,
   });
 }

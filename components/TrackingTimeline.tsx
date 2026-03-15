@@ -1,14 +1,14 @@
 "use client";
 
 import { MapPin, Clock, Check } from "lucide-react";
-import type { BinderByteTrackingResult } from "@/types/database";
+import type { TrackingResult } from "@/types/database";
 
 export function TrackingTimeline({
   result,
   fetchedAt,
   cached,
 }: {
-  result: BinderByteTrackingResult;
+  result: TrackingResult;
   fetchedAt: string;
   cached: boolean;
 }) {

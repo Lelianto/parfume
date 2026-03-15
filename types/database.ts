@@ -34,6 +34,9 @@ export interface User {
   // store location
   store_province: string | null;
   store_city: string | null;
+  store_city_id: number | null;
+  // default address city ID for RajaOngkir
+  address_city_id: number | null;
   // bank account (untuk info transfer)
   bank_name: string | null;
   bank_account_number: string | null;
@@ -131,6 +134,7 @@ export interface Order {
   shipping_village: string | null;
   shipping_postal_code: string | null;
   shipping_address: string | null;
+  shipping_city_id: number | null;
   confirmed_at: string | null;
   shipped_at: string | null;
   completed_at: string | null;
@@ -154,6 +158,22 @@ export interface Review {
   user?: User;
 }
 
+export interface RajaOngkirCity {
+  id: number;
+  province_name: string;
+  city_name: string;
+  district_name: string;
+  subdistrict_name: string;
+  zip_code: string | null;
+  label: string | null;
+}
+
+export interface PlatformFeature {
+  feature: string;
+  enabled: boolean;
+  config: Record<string, unknown>;
+}
+
 export interface Wishlist {
   id: string;
   user_id: string;
@@ -167,7 +187,7 @@ export interface TrackingCache {
   id: string;
   awb: string;
   courier: string;
-  result: BinderByteTrackingResult;
+  result: TrackingResult;
   fetched_at: string;
 }
 
@@ -177,7 +197,7 @@ export interface ApiUsage {
   request_count: number;
 }
 
-export interface BinderByteTrackingResult {
+export interface TrackingResult {
   summary: {
     awb: string;
     courier: string;

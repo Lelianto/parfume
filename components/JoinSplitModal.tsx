@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { X, Minus, Plus, ChevronRight, ChevronLeft, MapPin, Loader2 } from "lucide-react";
+import { X, Minus, Plus, ChevronRight, ChevronLeft, MapPin, Loader2, Pencil } from "lucide-react";
 import type { Split, SplitVariant, ShippingAddress } from "@/types/database";
 import { formatRupiah } from "@/lib/utils";
 
@@ -46,7 +46,11 @@ export function JoinSplitModal({ split, variant, onClose, onSuccess }: JoinSplit
   const [districts, setDistricts] = useState<AddressOption[]>([]);
   const [villages, setVillages] = useState<AddressOption[]>([]);
   const [loadingAddress, setLoadingAddress] = useState(false);
-  const [savedAddressLoaded, setSavedAddressLoaded] = useState(false);
+
+  // Saved address management
+  const [savedAddress, setSavedAddress] = useState<ShippingAddress | null>(null);
+  const [useSavedAddress, setUseSavedAddress] = useState(true); // default: use saved if available
+  const [editingAddress, setEditingAddress] = useState(false);
 
   const available = variant.stock - variant.sold;
   const totalPrice = quantity * variant.price;
@@ -65,7 +69,7 @@ export function JoinSplitModal({ split, variant, onClose, onSuccess }: JoinSplit
         .single();
 
       if (data?.address_name) {
-        setAddress({
+        const saved: ShippingAddress = {
           name: data.address_name || "",
           phone: data.address_phone || "",
           province: data.address_province || "",
@@ -74,8 +78,16 @@ export function JoinSplitModal({ split, variant, onClose, onSuccess }: JoinSplit
           village: data.address_village || "",
           postal_code: data.address_postal_code || "",
           address: data.address_detail || "",
-        });
-        setSavedAddressLoaded(true);
+        };
+        setSavedAddress(saved);
+        // Pre-fill with saved address
+        setAddress(saved);
+        setUseSavedAddress(true);
+        setEditingAddress(false);
+      } else {
+        // No saved address — go straight to form
+        setUseSavedAddress(false);
+        setEditingAddress(true);
       }
     }
     loadSavedAddress();
@@ -154,17 +166,49 @@ export function JoinSplitModal({ split, variant, onClose, onSuccess }: JoinSplit
     setAddress((a) => ({ ...a, village: v?.name || "" }));
   }
 
+  // The active address used for submission
+  const activeAddress = useSavedAddress && savedAddress && !editingAddress ? savedAddress : address;
+
   function isAddressComplete() {
     return (
-      address.name.trim() &&
-      address.phone.trim() &&
-      address.province.trim() &&
-      address.city.trim() &&
-      address.district.trim() &&
-      address.village.trim() &&
-      address.postal_code.trim() &&
-      address.address.trim()
+      activeAddress.name.trim() &&
+      activeAddress.phone.trim() &&
+      activeAddress.province.trim() &&
+      activeAddress.city.trim() &&
+      activeAddress.district.trim() &&
+      activeAddress.village.trim() &&
+      activeAddress.postal_code.trim() &&
+      activeAddress.address.trim()
     );
+  }
+
+  function handleSwitchToNewAddress() {
+    setUseSavedAddress(false);
+    setEditingAddress(true);
+    // Reset form to empty
+    setAddress({
+      name: "",
+      phone: "",
+      province: "",
+      city: "",
+      district: "",
+      village: "",
+      postal_code: "",
+      address: "",
+    });
+    setProvinceId("");
+    setCityId("");
+    setDistrictId("");
+    setCities([]);
+    setDistricts([]);
+    setVillages([]);
+  }
+
+  function handleUseSavedAddress() {
+    if (!savedAddress) return;
+    setUseSavedAddress(true);
+    setEditingAddress(false);
+    setAddress(savedAddress);
   }
 
   async function handleJoin() {
@@ -198,34 +242,50 @@ export function JoinSplitModal({ split, variant, onClose, onSuccess }: JoinSplit
       return;
     }
 
-    // 2. Save shipping address to order
+    // 2. Lookup RajaOngkir destination ID for shipping cost calculation
+    let shippingCityId: number | null = null;
+    if (activeAddress.village && activeAddress.city) {
+      const villageNorm = activeAddress.village.toUpperCase();
+      const cityNorm = activeAddress.city.replace(/^(kota|kabupaten|kab\.?)\s+/i, "").toUpperCase();
+      const { data: match } = await supabase
+        .from("rajaongkir_cities")
+        .select("id")
+        .ilike("subdistrict_name", villageNorm)
+        .ilike("city_name", `%${cityNorm}%`)
+        .limit(1)
+        .maybeSingle();
+      shippingCityId = match?.id ?? null;
+    }
+
+    // 3. Save shipping address to order
     await supabase
       .from("orders")
       .update({
-        shipping_name: address.name,
-        shipping_phone: address.phone,
-        shipping_province: address.province,
-        shipping_city: address.city,
-        shipping_district: address.district,
-        shipping_village: address.village,
-        shipping_postal_code: address.postal_code,
-        shipping_address: address.address,
+        shipping_name: activeAddress.name,
+        shipping_phone: activeAddress.phone,
+        shipping_province: activeAddress.province,
+        shipping_city: activeAddress.city,
+        shipping_district: activeAddress.district,
+        shipping_village: activeAddress.village,
+        shipping_postal_code: activeAddress.postal_code,
+        shipping_address: activeAddress.address,
+        shipping_city_id: shippingCityId,
       })
       .eq("id", orderId);
 
-    // 3. Save as default address if user doesn't have one
-    if (!savedAddressLoaded) {
+    // 4. Save as default address if user used a new address
+    if (!useSavedAddress || !savedAddress) {
       await supabase
         .from("users")
         .update({
-          address_name: address.name,
-          address_phone: address.phone,
-          address_province: address.province,
-          address_city: address.city,
-          address_district: address.district,
-          address_village: address.village,
-          address_postal_code: address.postal_code,
-          address_detail: address.address,
+          address_name: activeAddress.name,
+          address_phone: activeAddress.phone,
+          address_province: activeAddress.province,
+          address_city: activeAddress.city,
+          address_district: activeAddress.district,
+          address_village: activeAddress.village,
+          address_postal_code: activeAddress.postal_code,
+          address_detail: activeAddress.address,
         })
         .eq("id", user.id);
     }
@@ -315,127 +375,166 @@ export function JoinSplitModal({ split, variant, onClose, onSuccess }: JoinSplit
 
         {step === "address" && (
           <>
-            {/* Saved address indicator */}
-            {savedAddressLoaded && (
-              <div className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
-                <MapPin size={14} className="text-emerald-400" />
-                <p className="text-xs text-emerald-400">Alamat tersimpan dimuat otomatis</p>
+            {/* ── Saved Address Card ── */}
+            {savedAddress && !editingAddress && (
+              <div className="mt-4 space-y-3">
+                <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <MapPin size={16} className="mt-0.5 flex-shrink-0 text-emerald-400" />
+                      <div className="text-sm">
+                        <p className="font-medium text-gold-100">{savedAddress.name}</p>
+                        <p className="text-gold-200/50">{savedAddress.phone}</p>
+                        <p className="mt-1 text-xs text-gold-200/40">
+                          {savedAddress.address}
+                        </p>
+                        <p className="text-xs text-gold-200/40">
+                          {[savedAddress.village, savedAddress.district, savedAddress.city, savedAddress.province]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </p>
+                        {savedAddress.postal_code && (
+                          <p className="text-xs text-gold-200/30">{savedAddress.postal_code}</p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleSwitchToNewAddress}
+                      className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+                    >
+                      <Pencil size={11} /> Ganti
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
 
-            <div className="mt-4 space-y-3">
-              {/* Nama Penerima */}
-              <div>
-                <label className="block text-sm font-medium text-gold-200/60">Nama Penerima *</label>
-                <input
-                  type="text"
-                  value={address.name}
-                  onChange={(e) => setAddress((a) => ({ ...a, name: e.target.value }))}
-                  placeholder="Nama lengkap penerima"
-                  className={inputClass}
-                />
-              </div>
+            {/* ── Address Form (new address or no saved) ── */}
+            {editingAddress && (
+              <div className="mt-4 space-y-3">
+                {/* Back to saved address option */}
+                {savedAddress && (
+                  <button
+                    onClick={handleUseSavedAddress}
+                    className="flex w-full items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2.5 text-xs font-medium text-emerald-400 transition-colors hover:bg-emerald-500/10"
+                  >
+                    <MapPin size={13} /> Gunakan alamat tersimpan
+                  </button>
+                )}
 
-              {/* No HP */}
-              <div>
-                <label className="block text-sm font-medium text-gold-200/60">No. HP Penerima *</label>
-                <input
-                  type="tel"
-                  value={address.phone}
-                  onChange={(e) => setAddress((a) => ({ ...a, phone: e.target.value }))}
-                  placeholder="08xxxxxxxxxx"
-                  className={inputClass}
-                />
-              </div>
+                {/* Nama Penerima */}
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Nama Penerima *</label>
+                  <input
+                    type="text"
+                    value={address.name}
+                    onChange={(e) => setAddress((a) => ({ ...a, name: e.target.value }))}
+                    placeholder="Nama lengkap penerima"
+                    className={inputClass}
+                  />
+                </div>
 
-              {/* Provinsi */}
-              <div>
-                <label className="block text-sm font-medium text-gold-200/60">Provinsi *</label>
-                <select
-                  value={provinceId}
-                  onChange={(e) => handleProvinceChange(e.target.value)}
-                  className={selectClass + " mt-1"}
-                >
-                  <option value="">Pilih Provinsi</option>
-                  {provinces.map((p) => (
-                    <option key={p.id} value={p.id}>{p.name}</option>
-                  ))}
-                </select>
-              </div>
+                {/* No HP */}
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">No. HP Penerima *</label>
+                  <input
+                    type="tel"
+                    value={address.phone}
+                    onChange={(e) => setAddress((a) => ({ ...a, phone: e.target.value }))}
+                    placeholder="08xxxxxxxxxx"
+                    className={inputClass}
+                  />
+                </div>
 
-              {/* Kota/Kabupaten */}
-              <div>
-                <label className="block text-sm font-medium text-gold-200/60">Kota/Kabupaten *</label>
-                <select
-                  value={cityId}
-                  onChange={(e) => handleCityChange(e.target.value)}
-                  disabled={!provinceId}
-                  className={selectClass + " mt-1"}
-                >
-                  <option value="">Pilih Kota/Kabupaten</option>
-                  {cities.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-              </div>
+                {/* Provinsi */}
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Provinsi *</label>
+                  <select
+                    value={provinceId}
+                    onChange={(e) => handleProvinceChange(e.target.value)}
+                    className={selectClass + " mt-1"}
+                  >
+                    <option value="">Pilih Provinsi</option>
+                    {provinces.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Kecamatan */}
-              <div>
-                <label className="block text-sm font-medium text-gold-200/60">Kecamatan *</label>
-                <select
-                  value={districtId}
-                  onChange={(e) => handleDistrictChange(e.target.value)}
-                  disabled={!cityId}
-                  className={selectClass + " mt-1"}
-                >
-                  <option value="">Pilih Kecamatan</option>
-                  {districts.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name}</option>
-                  ))}
-                </select>
-              </div>
+                {/* Kota/Kabupaten */}
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Kota/Kabupaten *</label>
+                  <select
+                    value={cityId}
+                    onChange={(e) => handleCityChange(e.target.value)}
+                    disabled={!provinceId}
+                    className={selectClass + " mt-1"}
+                  >
+                    <option value="">Pilih Kota/Kabupaten</option>
+                    {cities.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Kelurahan */}
-              <div>
-                <label className="block text-sm font-medium text-gold-200/60">Kelurahan/Desa *</label>
-                <select
-                  value={villages.find((v) => v.name === address.village)?.id || ""}
-                  onChange={(e) => handleVillageChange(e.target.value)}
-                  disabled={!districtId}
-                  className={selectClass + " mt-1"}
-                >
-                  <option value="">Pilih Kelurahan/Desa</option>
-                  {villages.map((v) => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
-              </div>
+                {/* Kecamatan */}
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Kecamatan *</label>
+                  <select
+                    value={districtId}
+                    onChange={(e) => handleDistrictChange(e.target.value)}
+                    disabled={!cityId}
+                    className={selectClass + " mt-1"}
+                  >
+                    <option value="">Pilih Kecamatan</option>
+                    {districts.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Kode Pos */}
-              <div>
-                <label className="block text-sm font-medium text-gold-200/60">Kode Pos *</label>
-                <input
-                  type="text"
-                  value={address.postal_code}
-                  onChange={(e) => setAddress((a) => ({ ...a, postal_code: e.target.value }))}
-                  placeholder="Contoh: 12345"
-                  maxLength={5}
-                  className={inputClass}
-                />
-              </div>
+                {/* Kelurahan */}
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Kelurahan/Desa *</label>
+                  <select
+                    value={villages.find((v) => v.name === address.village)?.id || ""}
+                    onChange={(e) => handleVillageChange(e.target.value)}
+                    disabled={!districtId}
+                    className={selectClass + " mt-1"}
+                  >
+                    <option value="">Pilih Kelurahan/Desa</option>
+                    {villages.map((v) => (
+                      <option key={v.id} value={v.id}>{v.name}</option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Alamat Lengkap / Patokan */}
-              <div>
-                <label className="block text-sm font-medium text-gold-200/60">Alamat Lengkap & Patokan *</label>
-                <textarea
-                  value={address.address}
-                  onChange={(e) => setAddress((a) => ({ ...a, address: e.target.value }))}
-                  placeholder="Nama jalan, nomor rumah, RT/RW, patokan..."
-                  rows={3}
-                  className={inputClass + " resize-none"}
-                />
+                {/* Kode Pos */}
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Kode Pos *</label>
+                  <input
+                    type="text"
+                    value={address.postal_code}
+                    onChange={(e) => setAddress((a) => ({ ...a, postal_code: e.target.value }))}
+                    placeholder="Contoh: 12345"
+                    maxLength={5}
+                    className={inputClass}
+                  />
+                </div>
+
+                {/* Alamat Lengkap / Patokan */}
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Alamat Lengkap & Patokan *</label>
+                  <textarea
+                    value={address.address}
+                    onChange={(e) => setAddress((a) => ({ ...a, address: e.target.value }))}
+                    placeholder="Nama jalan, nomor rumah, RT/RW, patokan..."
+                    rows={3}
+                    className={inputClass + " resize-none"}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             {loadingAddress && (
               <div className="mt-2 flex items-center gap-2 text-xs text-gold-200/40">

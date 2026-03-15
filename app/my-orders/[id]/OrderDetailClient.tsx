@@ -9,7 +9,7 @@ import { OrderStatusBadge } from "@/components/StatusBadge";
 import { OrderTimeline } from "@/components/OrderTimeline";
 import { getTrackingInfo, isInAppTrackingAvailable, detectCourier } from "@/lib/tracking";
 import { formatRupiah } from "@/lib/utils";
-import type { Order, Split, User, PlatformSettings, BinderByteTrackingResult } from "@/types/database";
+import type { Order, Split, User, PlatformSettings, TrackingResult } from "@/types/database";
 import { TrackingTimeline } from "@/components/TrackingTimeline";
 import {
   ArrowLeft,
@@ -113,7 +113,7 @@ export function OrderDetailClient({
   const [uploading, setUploading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState("");
-  const [trackingData, setTrackingData] = useState<{ data: BinderByteTrackingResult; cached: boolean; fetched_at: string } | null>(null);
+  const [trackingData, setTrackingData] = useState<{ data: TrackingResult; cached: boolean; fetched_at: string } | null>(null);
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackingError, setTrackingError] = useState("");
   // Ongkir state

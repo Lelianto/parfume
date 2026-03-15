@@ -234,7 +234,7 @@ export function AdminDashboardClient({
         <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
           <p className="text-xs text-gold-200/40">API Tracking</p>
           <p className={`mt-1 font-display text-2xl font-bold ${
-            trackingUsageCount > 480 ? "text-red-400" : trackingUsageCount >= 400 ? "text-yellow-400" : "text-emerald-400"
+            trackingUsageCount > 500 ? "text-red-400" : trackingUsageCount >= 400 ? "text-yellow-400" : "text-emerald-400"
           }`}>
             {trackingUsageCount}<span className="text-sm font-normal text-gold-200/30">/500</span>
           </p>

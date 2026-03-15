@@ -1,29 +1,23 @@
-// All couriers supported by BinderByte API
-export const BINDERBYTE_COURIERS: Record<string, string> = {
+// All couriers supported by RajaOngkir waybill tracking
+export const SUPPORTED_COURIERS: Record<string, string> = {
   jne: "JNE",
   pos: "Pos Indonesia",
   jnt: "J&T Express",
-  jnt_cargo: "J&T Cargo",
   sicepat: "SiCepat",
   tiki: "TIKI",
   anteraja: "AnterAja",
   wahana: "Wahana",
   ninja: "Ninja Xpress",
   lion: "Lion Parcel",
-  pcp: "PCP Express",
   jet: "JET Express",
   rex: "REX Express",
-  first: "First Logistics",
   ide: "ID Express",
-  spx: "Shopee Express",
-  kgx: "KGX",
   sap: "SAP Express",
   rpx: "RPX",
-  lex: "Lazada Express",
-  indah_cargo: "Indah Cargo",
-  dakota: "Dakota Cargo",
-  kurir_tokopedia: "Kurir Tokopedia",
 };
+
+// Backward compat alias
+export const BINDERBYTE_COURIERS = SUPPORTED_COURIERS;
 
 // Mapping ekspedisi ke URL tracking mereka
 const COURIER_TRACKING: Record<string, { name: string; url: (resi: string) => string }> = {
@@ -78,7 +72,7 @@ export function detectCourier(resi: string): string | null {
 
 export function isInAppTrackingAvailable(courier: string | null): boolean {
   if (!courier) return false;
-  return courier in BINDERBYTE_COURIERS;
+  return courier in SUPPORTED_COURIERS;
 }
 
 export function getTrackingUrl(resi: string): string | null {

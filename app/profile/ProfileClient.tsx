@@ -44,6 +44,9 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
   const [storeProvinceId, setStoreProvinceId] = useState("");
   const [storeCities, setStoreCities] = useState<AddressOption[]>([]);
   const [storeCityId, setStoreCityId] = useState("");
+  // RajaOngkir city IDs (resolved on save)
+  const [storeCityRajaId, setStoreCityRajaId] = useState<number | null>(profile.store_city_id ?? null);
+  const [addressCityRajaId, setAddressCityRajaId] = useState<number | null>(profile.address_city_id ?? null);
 
   // Bank account (untuk info pembayaran split)
   const [bankName, setBankName] = useState(profile.bank_name || "");
@@ -192,6 +195,47 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
     setSaved(false);
 
     const supabase = createClient();
+
+    // Resolve RajaOngkir destination IDs from cache table (subdistrict-level)
+    let newStoreCityId = storeCityRajaId;
+    let newAddressCityId = addressCityRajaId;
+
+    if (storeCity) {
+      const cityNorm = storeCity.replace(/^(kota|kabupaten|kab\.?)\s+/i, "").toUpperCase();
+      const { data: match } = await supabase
+        .from("rajaongkir_cities")
+        .select("id")
+        .ilike("city_name", `%${cityNorm}%`)
+        .limit(1)
+        .maybeSingle();
+      newStoreCityId = match?.id ?? null;
+      setStoreCityRajaId(newStoreCityId);
+    }
+
+    if (addressVillage && addressCity) {
+      const villageNorm = addressVillage.toUpperCase();
+      const cityNorm = addressCity.replace(/^(kota|kabupaten|kab\.?)\s+/i, "").toUpperCase();
+      const { data: match } = await supabase
+        .from("rajaongkir_cities")
+        .select("id")
+        .ilike("subdistrict_name", villageNorm)
+        .ilike("city_name", `%${cityNorm}%`)
+        .limit(1)
+        .maybeSingle();
+      newAddressCityId = match?.id ?? null;
+      setAddressCityRajaId(newAddressCityId);
+    } else if (addressCity) {
+      const cityNorm = addressCity.replace(/^(kota|kabupaten|kab\.?)\s+/i, "").toUpperCase();
+      const { data: match } = await supabase
+        .from("rajaongkir_cities")
+        .select("id")
+        .ilike("city_name", `%${cityNorm}%`)
+        .limit(1)
+        .maybeSingle();
+      newAddressCityId = match?.id ?? null;
+      setAddressCityRajaId(newAddressCityId);
+    }
+
     const { error: updateError } = await supabase
       .from("users")
       .update({
@@ -209,6 +253,8 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
         address_detail: addressDetail.trim() || null,
         store_province: storeProvince || null,
         store_city: storeCity || null,
+        store_city_id: newStoreCityId,
+        address_city_id: newAddressCityId,
         bank_name: bankName.trim() || null,
         bank_account_number: bankAccountNumber.trim() || null,
         bank_account_name: bankAccountName.trim() || null,
