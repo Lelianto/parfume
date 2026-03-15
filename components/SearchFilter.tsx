@@ -14,6 +14,16 @@ const SORT_OPTIONS = [
 ];
 const SCENT_FAMILIES = ["Woody", "Floral", "Oriental", "Fresh", "Citrus", "Aquatic", "Gourmand", "Aromatic"];
 
+const PRICE_MIN = 0;
+const PRICE_MAX = 2000000;
+const PRICE_STEP = 25000;
+
+function formatRupiahShort(val: number) {
+  if (val >= 1000000) return `${(val / 1000000).toFixed(val % 1000000 === 0 ? 0 : 1)}jt`;
+  if (val >= 1000) return `${Math.round(val / 1000)}rb`;
+  return `${val}`;
+}
+
 interface SearchFilterProps {
   brands: string[];
 }
@@ -27,21 +37,32 @@ export function SearchFilter({ brands }: SearchFilterProps) {
   const currentConcentration = searchParams.get("concentration") ?? "";
   const currentSort = searchParams.get("sort") ?? "newest";
   const currentScent = searchParams.get("scent") ?? "";
+  const currentPriceMin = Number(searchParams.get("price_min") ?? PRICE_MIN);
+  const currentPriceMax = Number(searchParams.get("price_max") ?? PRICE_MAX);
 
-  // Mobile filter panel state
   const [mobileOpen, setMobileOpen] = useState(false);
   const [tempBrand, setTempBrand] = useState(currentBrand);
   const [tempConcentration, setTempConcentration] = useState(currentConcentration);
   const [tempSort, setTempSort] = useState(currentSort);
   const [tempScent, setTempScent] = useState(currentScent);
+  const [tempPriceMin, setTempPriceMin] = useState(currentPriceMin);
+  const [tempPriceMax, setTempPriceMax] = useState(currentPriceMax);
 
-  // Sync temp state when URL params change
+  // Desktop price state (applies immediately on mouse up)
+  const [desktopPriceMin, setDesktopPriceMin] = useState(currentPriceMin);
+  const [desktopPriceMax, setDesktopPriceMax] = useState(currentPriceMax);
+  const [showPriceFilter, setShowPriceFilter] = useState(false);
+
   useEffect(() => {
     setTempBrand(currentBrand);
     setTempConcentration(currentConcentration);
     setTempSort(currentSort);
     setTempScent(currentScent);
-  }, [currentBrand, currentConcentration, currentSort, currentScent]);
+    setTempPriceMin(currentPriceMin);
+    setTempPriceMax(currentPriceMax);
+    setDesktopPriceMin(currentPriceMin);
+    setDesktopPriceMax(currentPriceMax);
+  }, [currentBrand, currentConcentration, currentSort, currentScent, currentPriceMin, currentPriceMax]);
 
   const updateParams = useCallback(
     (updates: Record<string, string>) => {
@@ -58,7 +79,6 @@ export function SearchFilter({ brands }: SearchFilterProps) {
     [router, searchParams]
   );
 
-  // Debounced search
   useEffect(() => {
     const timer = setTimeout(() => {
       updateParams({ q: search });
@@ -66,8 +86,21 @@ export function SearchFilter({ brands }: SearchFilterProps) {
     return () => clearTimeout(timer);
   }, [search, updateParams]);
 
-  const hasFilters = search || currentBrand || currentConcentration || currentScent || currentSort !== "newest";
-  const activeFilterCount = [currentBrand, currentConcentration, currentScent, currentSort !== "newest" ? currentSort : ""].filter(Boolean).length;
+  const hasPriceFilter = currentPriceMin > PRICE_MIN || currentPriceMax < PRICE_MAX;
+  const hasFilters = search || currentBrand || currentConcentration || currentScent || currentSort !== "newest" || hasPriceFilter;
+  const activeFilterCount = [
+    currentBrand,
+    currentConcentration,
+    currentScent,
+    currentSort !== "newest" ? currentSort : "",
+    hasPriceFilter ? "price" : "",
+  ].filter(Boolean).length;
+
+  function applyDesktopPrice() {
+    const min = desktopPriceMin <= PRICE_MIN ? "" : String(desktopPriceMin);
+    const max = desktopPriceMax >= PRICE_MAX ? "" : String(desktopPriceMax);
+    updateParams({ price_min: min, price_max: max });
+  }
 
   function clearAll() {
     setSearch("");
@@ -75,11 +108,15 @@ export function SearchFilter({ brands }: SearchFilterProps) {
   }
 
   function applyMobileFilters() {
+    const min = tempPriceMin <= PRICE_MIN ? "" : String(tempPriceMin);
+    const max = tempPriceMax >= PRICE_MAX ? "" : String(tempPriceMax);
     updateParams({
       brand: tempBrand,
       concentration: tempConcentration,
       sort: tempSort,
       scent: tempScent,
+      price_min: min,
+      price_max: max,
     });
     setMobileOpen(false);
   }
@@ -89,13 +126,73 @@ export function SearchFilter({ brands }: SearchFilterProps) {
     setTempConcentration("");
     setTempSort("newest");
     setTempScent("");
+    setTempPriceMin(PRICE_MIN);
+    setTempPriceMax(PRICE_MAX);
   }
+
+  const PriceRangeSlider = ({
+    min, max, onMinChange, onMaxChange, onApply,
+  }: {
+    min: number; max: number;
+    onMinChange: (v: number) => void;
+    onMaxChange: (v: number) => void;
+    onApply?: () => void;
+  }) => (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="rounded-lg bg-surface-300 px-2.5 py-1 font-mono text-[11px] text-gold-300">
+          {formatRupiahShort(min)}
+        </span>
+        <span className="text-[11px] text-gold-200/30">—</span>
+        <span className="rounded-lg bg-surface-300 px-2.5 py-1 font-mono text-[11px] text-gold-300">
+          {max >= PRICE_MAX ? "2jt+" : formatRupiahShort(max)}
+        </span>
+      </div>
+      <div className="relative h-5 flex items-center">
+        <div className="absolute h-1 w-full rounded-full bg-gold-900/40" />
+        <div
+          className="absolute h-1 rounded-full bg-gold-400/60"
+          style={{
+            left: `${((min - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * 100}%`,
+            right: `${100 - ((max - PRICE_MIN) / (PRICE_MAX - PRICE_MIN)) * 100}%`,
+          }}
+        />
+        <input
+          type="range"
+          min={PRICE_MIN}
+          max={PRICE_MAX}
+          step={PRICE_STEP}
+          value={min}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (v < max) onMinChange(v);
+          }}
+          onMouseUp={onApply}
+          onTouchEnd={onApply}
+          className="absolute w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gold-400 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:ring-2 [&::-webkit-slider-thumb]:ring-surface-400"
+        />
+        <input
+          type="range"
+          min={PRICE_MIN}
+          max={PRICE_MAX}
+          step={PRICE_STEP}
+          value={max}
+          onChange={(e) => {
+            const v = Number(e.target.value);
+            if (v > min) onMaxChange(v);
+          }}
+          onMouseUp={onApply}
+          onTouchEnd={onApply}
+          className="absolute w-full appearance-none bg-transparent [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gold-400 [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:ring-2 [&::-webkit-slider-thumb]:ring-surface-400"
+        />
+      </div>
+    </div>
+  );
 
   return (
     <>
       {/* ========== DESKTOP ========== */}
       <div className="hidden space-y-3 sm:block">
-        {/* Search input */}
         <div className="relative">
           <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-gold-200/30" />
           <input
@@ -115,7 +212,6 @@ export function SearchFilter({ brands }: SearchFilterProps) {
           )}
         </div>
 
-        {/* Filter row */}
         <div className="flex flex-wrap items-center gap-2">
           {brands.length > 0 && (
             <select
@@ -158,6 +254,58 @@ export function SearchFilter({ brands }: SearchFilterProps) {
             </button>
           ))}
 
+          {/* Price filter dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPriceFilter(!showPriceFilter)}
+              className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
+                hasPriceFilter || showPriceFilter
+                  ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
+                  : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
+              }`}
+            >
+              {hasPriceFilter
+                ? `${formatRupiahShort(currentPriceMin)} – ${currentPriceMax >= PRICE_MAX ? "2jt+" : formatRupiahShort(currentPriceMax)}`
+                : "Harga"}
+            </button>
+
+            <AnimatePresence>
+              {showPriceFilter && (
+                <motion.div
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.15 }}
+                  className="absolute left-0 top-full z-20 mt-2 w-64 rounded-xl border border-gold-900/20 bg-surface-200 p-4 shadow-xl"
+                >
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">
+                    Range Harga
+                  </p>
+                  <PriceRangeSlider
+                    min={desktopPriceMin}
+                    max={desktopPriceMax}
+                    onMinChange={setDesktopPriceMin}
+                    onMaxChange={setDesktopPriceMax}
+                    onApply={applyDesktopPrice}
+                  />
+                  {hasPriceFilter && (
+                    <button
+                      onClick={() => {
+                        setDesktopPriceMin(PRICE_MIN);
+                        setDesktopPriceMax(PRICE_MAX);
+                        updateParams({ price_min: "", price_max: "" });
+                        setShowPriceFilter(false);
+                      }}
+                      className="mt-3 w-full rounded-lg py-1.5 text-[11px] text-red-400 hover:bg-red-500/10"
+                    >
+                      Reset harga
+                    </button>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
           <select
             value={currentSort}
             onChange={(e) => updateParams({ sort: e.target.value })}
@@ -181,7 +329,6 @@ export function SearchFilter({ brands }: SearchFilterProps) {
 
       {/* ========== MOBILE ========== */}
       <div className="sm:hidden">
-        {/* Search + filter toggle row */}
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gold-200/30" />
@@ -219,7 +366,6 @@ export function SearchFilter({ brands }: SearchFilterProps) {
           </button>
         </div>
 
-        {/* Filter panel */}
         <AnimatePresence>
           {mobileOpen && (
             <motion.div
@@ -229,8 +375,7 @@ export function SearchFilter({ brands }: SearchFilterProps) {
               transition={{ duration: 0.25, ease: "easeInOut" }}
               className="overflow-hidden"
             >
-              <div className="mt-3 rounded-2xl border border-gold-900/20 bg-surface-200/80 p-4 space-y-4">
-                {/* Brand */}
+              <div className="mt-3 space-y-4 rounded-2xl border border-gold-900/20 bg-surface-200/80 p-4">
                 {brands.length > 0 && (
                   <div>
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Brand</p>
@@ -247,7 +392,6 @@ export function SearchFilter({ brands }: SearchFilterProps) {
                   </div>
                 )}
 
-                {/* Concentration */}
                 <div>
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Konsentrasi</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -268,7 +412,6 @@ export function SearchFilter({ brands }: SearchFilterProps) {
                   </div>
                 </div>
 
-                {/* Scent Family */}
                 <div>
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Scent Family</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -289,7 +432,17 @@ export function SearchFilter({ brands }: SearchFilterProps) {
                   </div>
                 </div>
 
-                {/* Sort */}
+                {/* Price range mobile */}
+                <div>
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Range Harga</p>
+                  <PriceRangeSlider
+                    min={tempPriceMin}
+                    max={tempPriceMax}
+                    onMinChange={setTempPriceMin}
+                    onMaxChange={setTempPriceMax}
+                  />
+                </div>
+
                 <div>
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Urutkan</p>
                   <div className="flex flex-wrap gap-1.5">
@@ -310,7 +463,6 @@ export function SearchFilter({ brands }: SearchFilterProps) {
                   </div>
                 </div>
 
-                {/* Actions */}
                 <div className="flex gap-2 pt-1">
                   <button
                     onClick={clearMobileFilters}

@@ -2,20 +2,28 @@ import Link from "next/link";
 import Image from "next/image";
 import { ProgressBar } from "./ProgressBar";
 import { SplitStatusBadge } from "./StatusBadge";
+import { WishlistButton } from "./WishlistButton";
 import type { Split } from "@/types/database";
-import { Droplets } from "lucide-react";
+import { Droplets, Star } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 
-export function SplitCard({ split }: { split: Split }) {
+interface SplitCardProps {
+  split: Split;
+  isLoggedIn?: boolean;
+  wishlisted?: boolean;
+}
+
+export function SplitCard({ split, isLoggedIn = false, wishlisted = false }: SplitCardProps) {
   const variants = split.variants ?? [];
   const sortedVariants = [...variants].sort((a, b) => a.size_ml - b.size_ml);
   const hasVariants = sortedVariants.length > 0;
 
   const totalSold = hasVariants ? variants.reduce((s, v) => s + v.sold, 0) : split.filled_slots;
   const totalStock = hasVariants ? variants.reduce((s, v) => s + v.stock, 0) : split.total_slots;
-
   const minPrice = hasVariants ? Math.min(...variants.map((v) => v.price)) : split.price_per_slot;
   const maxPrice = hasVariants ? Math.max(...variants.map((v) => v.price)) : split.price_per_slot;
+
+  const hasRating = split.avg_rating != null && (split.review_count ?? 0) > 0;
 
   return (
     <Link href={`/split/${split.id}`}>
@@ -35,9 +43,29 @@ export function SplitCard({ split }: { split: Split }) {
             </div>
           )}
           <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-surface-400/60 to-transparent" />
-          <div className="absolute right-3 top-3">
+
+          {/* Top-right: wishlist + status */}
+          <div className="absolute right-3 top-3 flex items-center gap-1.5">
+            <WishlistButton
+              splitId={split.id}
+              initialWishlisted={wishlisted}
+              isLoggedIn={isLoggedIn}
+            />
             <SplitStatusBadge status={split.status} />
           </div>
+
+          {/* Rating badge — bottom left of image */}
+          {hasRating && (
+            <div className="absolute bottom-3 left-3 flex items-center gap-1 rounded-lg bg-black/60 px-2 py-1 backdrop-blur-sm">
+              <Star size={11} className="fill-gold-400 text-gold-400" />
+              <span className="text-[11px] font-semibold text-gold-200">
+                {split.avg_rating!.toFixed(1)}
+              </span>
+              <span className="text-[10px] text-gold-200/50">
+                ({split.review_count})
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -45,7 +73,7 @@ export function SplitCard({ split }: { split: Split }) {
           <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gold-400/60 sm:text-[11px]">
             {split.perfume?.brand}
           </p>
-          <h3 className="mt-0.5 font-display text-sm font-semibold leading-snug text-gold-100 line-clamp-2 sm:mt-1 sm:text-[1.1rem]">
+          <h3 className="mt-0.5 line-clamp-2 font-display text-sm font-semibold leading-snug text-gold-100 sm:mt-1 sm:text-[1.1rem]">
             {split.perfume?.name}
             {split.perfume?.variant && (
               <span className="text-gold-200/50"> — {split.perfume.variant}</span>
@@ -80,11 +108,7 @@ export function SplitCard({ split }: { split: Split }) {
           )}
 
           <div className="mt-3 sm:mt-4">
-            <ProgressBar
-              filled={totalSold}
-              total={totalStock}
-              size="sm"
-            />
+            <ProgressBar filled={totalSold} total={totalStock} size="sm" />
           </div>
 
           <div className="mt-3 sm:mt-4">

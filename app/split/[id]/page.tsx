@@ -2,14 +2,55 @@ import { createClient } from "@/lib/supabase/server";
 import { notFound } from "next/navigation";
 import { SplitDetailClient } from "./SplitDetailClient";
 import type { Split, Order, Review } from "@/types/database";
+import type { Metadata } from "next";
 
 export const revalidate = 0;
 
-export default async function SplitDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+type Props = { params: Promise<{ id: string }> };
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: split } = await supabase
+    .from("splits")
+    .select("*, perfume:perfumes(*), variants:split_variants(*)")
+    .eq("id", id)
+    .single();
+
+  if (!split?.perfume) return { title: "Split Parfum — Wangiverse" };
+
+  const perfume = split.perfume;
+  const variants = split.variants ?? [];
+  const minPrice = variants.length > 0
+    ? Math.min(...variants.map((v: { price: number }) => v.price))
+    : split.price_per_slot;
+  const totalSold = variants.reduce((s: number, v: { sold: number }) => s + v.sold, 0);
+  const totalStock = variants.reduce((s: number, v: { stock: number }) => s + v.stock, 0);
+  const slotsLeft = totalStock - totalSold;
+
+  const title = `${perfume.brand} ${perfume.name} — Split di Wangiverse`;
+  const description = `Split parfum ${perfume.brand} ${perfume.name}${perfume.concentration ? ` ${perfume.concentration}` : ""}. Mulai dari Rp${minPrice.toLocaleString("id-ID")}. ${slotsLeft > 0 ? `${slotsLeft} slot tersisa.` : "Slot habis."} Parfum original 100% autentik.`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      siteName: "Wangiverse",
+      locale: "id_ID",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
+  };
+}
+
+export default async function SplitDetailPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
 
@@ -31,7 +72,6 @@ export default async function SplitDetailPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Check if current user has an order for this split
   let hasOrder = false;
   let hasCompletedOrder = false;
   let hasReviewed = false;
@@ -54,7 +94,6 @@ export default async function SplitDetailPage({
     hasReviewed = (reviewCount ?? 0) > 0;
   }
 
-  // Fetch orders for seller panel
   let splitOrders: (Order & { user?: { name: string; avatar_url: string | null } })[] = [];
   if (isCreator) {
     const { data: ordersData } = await supabase

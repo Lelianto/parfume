@@ -5,7 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { OrderStatusBadge } from "@/components/StatusBadge";
-import type { Order, Split } from "@/types/database";
+import { OrderTimeline } from "@/components/OrderTimeline";
+import { getTrackingInfo } from "@/lib/tracking";
+import { formatRupiah } from "@/lib/utils";
+import type { Order, Split, User } from "@/types/database";
 import {
   ArrowLeft,
   Upload,
@@ -18,9 +21,11 @@ import {
   Droplets,
   Star,
   FlaskConical,
-  MapPin,
+  MessageCircle,
+  Copy,
+  Check,
+  ExternalLink,
 } from "lucide-react";
-import { formatRupiah } from "@/lib/utils";
 
 function useCountdown(deadline: string | null) {
   const [timeLeft, setTimeLeft] = useState("");
@@ -53,11 +58,33 @@ function useCountdown(deadline: string | null) {
   return { timeLeft, expired };
 }
 
-export function OrderDetailClient({
-  order: initialOrder,
-}: {
-  order: Order & { split: Split };
-}) {
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gold-200/40 transition-colors hover:bg-gold-400/10 hover:text-gold-400"
+    >
+      {copied ? <Check size={12} className="text-emerald-400" /> : <Copy size={12} />}
+      {copied ? "Tersalin" : "Salin"}
+    </button>
+  );
+}
+
+type OrderWithSplit = Order & {
+  split: Split & {
+    creator?: User;
+  };
+};
+
+export function OrderDetailClient({ order: initialOrder }: { order: OrderWithSplit }) {
   const [order, setOrder] = useState(initialOrder);
   const [uploading, setUploading] = useState(false);
   const [confirming, setConfirming] = useState(false);
@@ -67,6 +94,10 @@ export function OrderDetailClient({
   );
 
   const split = order.split!;
+  const creator = split.creator;
+  const trackingInfo = order.shipping_receipt
+    ? getTrackingInfo(order.shipping_receipt)
+    : null;
 
   const refreshOrder = useCallback(async () => {
     const supabase = createClient();
@@ -75,7 +106,7 @@ export function OrderDetailClient({
       .select("*, split:splits(*, perfume:perfumes(*), creator:users!splits_created_by_fkey(*))")
       .eq("id", order.id)
       .single();
-    if (data) setOrder(data as unknown as Order & { split: Split });
+    if (data) setOrder(data as unknown as OrderWithSplit);
   }, [order.id]);
 
   async function handleUploadPaymentProof(file: File) {
@@ -122,8 +153,16 @@ export function OrderDetailClient({
     await refreshOrder();
   }
 
+  // WhatsApp link ke seller dengan pesan otomatis
+  const waMessage = encodeURIComponent(
+    `Halo kak, saya ingin menanyakan pesanan saya di Wangiverse.\n\nOrder: ${split.perfume?.brand} - ${split.perfume?.name}\nID: ${order.id.slice(0, 8).toUpperCase()}`
+  );
+  const waUrl = creator?.whatsapp
+    ? `https://wa.me/${creator.whatsapp.replace(/\D/g, "")}?text=${waMessage}`
+    : null;
+
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-8 pt-20 md:pt-8">
+    <div className="mx-auto max-w-2xl px-4 pb-12 pt-20 md:pt-8">
       <Link
         href="/my-orders"
         className="mb-6 hidden items-center gap-1.5 text-sm text-gold-200/40 transition-colors hover:text-gold-400 md:inline-flex"
@@ -142,93 +181,132 @@ export function OrderDetailClient({
             </div>
           )}
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-gold-400/70">
             {split.perfume?.brand}
           </p>
-          <p className="font-display text-xl font-bold text-gold-100">
+          <p className="font-display text-xl font-bold text-gold-100 truncate">
             {split.perfume?.name}
-            {split.perfume?.variant && (
-              <span className="text-gold-200/50"> — {split.perfume.variant}</span>
-            )}
           </p>
-          <div className="mt-1.5 flex items-center gap-3">
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
             <OrderStatusBadge status={order.status} />
             <span className="text-sm text-gold-200/40">
               {order.size_ml ? `${order.size_ml}ml` : `${order.slots_purchased} slot`}
-              {order.slots_purchased > 1 && order.size_ml ? ` × ${order.slots_purchased}` : ""}
             </span>
-            <span className="text-sm font-medium text-gold-400">{formatRupiah(order.total_price)}</span>
+            <span className="text-sm font-semibold text-gold-400">
+              {formatRupiah(order.total_price)}
+            </span>
           </div>
+          <p className="mt-1 font-mono text-[11px] text-gold-200/20">
+            #{order.id.slice(0, 8).toUpperCase()}
+          </p>
         </div>
       </div>
 
-      {/* Shipping Address */}
-      {order.shipping_name && (
-        <div className="mt-6 rounded-2xl border border-gold-900/20 bg-surface-200/60 p-5">
-          <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold text-gold-200/60">
-            <MapPin size={14} /> Alamat Pengiriman
-          </h2>
-          <div className="space-y-1 text-sm">
-            <p className="font-medium text-gold-100">{order.shipping_name}</p>
-            <p className="text-gold-200/50">{order.shipping_phone}</p>
-            <p className="text-gold-200/50">{order.shipping_address}</p>
-            <p className="text-gold-200/50">
-              {[order.shipping_village, order.shipping_district, order.shipping_city, order.shipping_province]
-                .filter(Boolean)
-                .join(", ")}
-            </p>
-            {order.shipping_postal_code && (
-              <p className="font-mono text-xs text-gold-200/40">{order.shipping_postal_code}</p>
-            )}
-          </div>
+      <div className="my-6 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
+
+      {/* ── Timeline ── */}
+      {order.status !== "cancelled" && (
+        <div className="mb-6 rounded-2xl border border-gold-900/20 bg-surface-200/50 p-5">
+          <p className="mb-4 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
+            Status Pesanan
+          </p>
+          <OrderTimeline status={order.status} />
         </div>
       )}
 
-      <div className="my-6 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
+      {/* ── Status-specific content ── */}
 
-      {/* Status-specific content */}
+      {/* PENDING PAYMENT */}
       {order.status === "pending_payment" && (
         <div className="space-y-4">
           {/* Countdown */}
-          <div className="flex items-center gap-3 rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
-            <Clock size={20} className="flex-shrink-0 text-orange-400" />
+          <div className="flex items-center gap-4 rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
+            <Clock size={24} className="flex-shrink-0 text-orange-400" />
             <div>
-              <p className="text-sm font-medium text-orange-400">
-                Batas waktu pembayaran
-              </p>
-              <p className={`font-mono text-2xl font-bold ${expired ? "text-red-400" : "text-orange-300"}`}>
+              <p className="text-sm font-medium text-orange-300">Batas waktu pembayaran</p>
+              <p className={`font-mono text-3xl font-bold tracking-widest ${expired ? "text-red-400" : "text-orange-200"}`}>
                 {timeLeft}
               </p>
               {expired && (
-                <p className="text-xs text-red-400">Waktu habis. Order akan otomatis dibatalkan.</p>
+                <p className="mt-0.5 text-xs text-red-400">Waktu habis. Order akan segera dibatalkan.</p>
               )}
             </div>
           </div>
 
           {/* Bank Info */}
-          <div className="rounded-xl border border-gold-900/20 bg-surface-200/80 p-4">
-            <p className="text-sm font-medium text-gold-200/60">Transfer ke rekening:</p>
-            <div className="mt-2 space-y-1">
-              <p className="font-mono text-lg font-bold text-gold-100">BCA - 1234567890</p>
-              <p className="text-sm text-gold-200/40">a.n. Wangiverse Platform</p>
-              <p className="mt-2 text-sm text-gold-200/60">
-                Jumlah: <span className="font-semibold text-gold-400">{formatRupiah(order.total_price)}</span>
+          {creator?.bank_name ? (
+            <div className="rounded-xl border border-gold-900/20 bg-surface-200/80 p-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
+                Transfer ke rekening berikut
               </p>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-gold-200/40">Bank</p>
+                    <p className="font-semibold text-gold-100">{creator.bank_name}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between rounded-lg bg-surface-300/60 px-4 py-3">
+                  <div>
+                    <p className="text-xs text-gold-200/40">Nomor Rekening</p>
+                    <p className="font-mono text-lg font-bold text-gold-100">
+                      {creator.bank_account_number}
+                    </p>
+                    <p className="text-xs text-gold-200/40">a.n. {creator.bank_account_name}</p>
+                  </div>
+                  <CopyButton text={creator.bank_account_number ?? ""} />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border border-gold-700/20 bg-gold-400/5 px-4 py-3">
+                  <div>
+                    <p className="text-xs text-gold-200/40">Jumlah Transfer</p>
+                    <p className="font-display text-xl font-bold text-gold-400">
+                      {formatRupiah(order.total_price)}
+                    </p>
+                  </div>
+                  <CopyButton text={String(order.total_price)} />
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="rounded-xl border border-gold-900/20 bg-surface-200/80 p-5">
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
+                Info pembayaran
+              </p>
+              <p className="text-sm text-gold-200/40">
+                Hubungi seller untuk mendapatkan info rekening pembayaran.
+              </p>
+              {waUrl && (
+                <a
+                  href={waUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/15"
+                >
+                  <MessageCircle size={15} />
+                  Tanya Seller via WhatsApp
+                </a>
+              )}
+            </div>
+          )}
 
-          {/* Upload Payment Proof */}
+          {/* Upload Bukti Bayar */}
           {!expired && (
             <div>
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gold-900/40 bg-surface-200/50 p-6 transition-colors hover:border-gold-700/50 hover:bg-surface-200">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
+                Upload Bukti Transfer
+              </p>
+              <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gold-900/40 bg-surface-200/50 p-8 transition-colors hover:border-gold-700/50 hover:bg-surface-200">
                 {uploading ? (
-                  <Loader2 size={22} className="animate-spin text-gold-400" />
+                  <>
+                    <Loader2 size={24} className="animate-spin text-gold-400" />
+                    <p className="mt-2 text-sm text-gold-200/50">Mengupload...</p>
+                  </>
                 ) : (
                   <>
-                    <Upload size={22} className="text-gold-200/30" />
-                    <p className="mt-2 text-sm font-medium text-gold-200/50">Upload Bukti Bayar</p>
-                    <p className="mt-1 text-[11px] text-gold-200/25">JPG, PNG, WebP. Maks 5MB</p>
+                    <Upload size={24} className="text-gold-200/30" />
+                    <p className="mt-2 text-sm font-medium text-gold-200/50">Tap untuk upload bukti transfer</p>
+                    <p className="mt-1 text-xs text-gold-200/25">JPG, PNG, WebP · Maks 5MB</p>
                   </>
                 )}
                 <input
@@ -247,120 +325,150 @@ export function OrderDetailClient({
         </div>
       )}
 
+      {/* PAID */}
       {order.status === "paid" && (
-        <div className="flex items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
-          <Clock size={20} className="flex-shrink-0 text-blue-400" />
-          <div>
-            <p className="text-sm font-medium text-blue-400">Menunggu verifikasi pembayaran</p>
-            <p className="text-xs text-gold-200/40">Seller akan mengkonfirmasi pembayaran Anda.</p>
-          </div>
-        </div>
-      )}
-
-      {order.status === "confirmed" && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
-            <CheckCircle2 size={20} className="flex-shrink-0 text-sky-400" />
+        <div className="space-y-4">
+          <div className="flex items-start gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+            <Clock size={20} className="mt-0.5 flex-shrink-0 text-blue-400" />
             <div>
-              <p className="text-sm font-medium text-sky-400">Pembayaran dikonfirmasi</p>
-              {!split.is_ready_stock && (
-                <p className="text-xs text-gold-200/40">
-                  Menunggu semua slot terisi sebelum seller mulai proses decant.
-                </p>
-              )}
-              {split.is_ready_stock && (
-                <p className="text-xs text-gold-200/40">
-                  Seller akan segera mengirim pesanan Anda.
-                </p>
-              )}
+              <p className="text-sm font-semibold text-blue-300">Bukti bayar diterima</p>
+              <p className="mt-0.5 text-xs text-gold-200/40">
+                Admin sedang memverifikasi pembayaran kamu. Biasanya selesai dalam 1×24 jam.
+              </p>
             </div>
           </div>
+          {/* Payment proof preview */}
+          {order.payment_proof_url && (
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
+                Bukti Pembayaran
+              </p>
+              <div className="relative aspect-[3/4] max-w-[180px] overflow-hidden rounded-xl border border-gold-900/15">
+                <Image src={order.payment_proof_url} alt="Bukti Bayar" fill className="object-cover" />
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {order.status === "decanting" && (
-        <div className="flex items-center gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
-          <FlaskConical size={20} className="flex-shrink-0 text-indigo-400" />
+      {/* CONFIRMED */}
+      {order.status === "confirmed" && (
+        <div className="flex items-start gap-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-4">
+          <CheckCircle2 size={20} className="mt-0.5 flex-shrink-0 text-sky-400" />
           <div>
-            <p className="text-sm font-medium text-indigo-400">Seller sedang proses decant</p>
-            <p className="text-xs text-gold-200/40">
-              Parfum sedang di-decant ke botol kecil. Harap tunggu.
+            <p className="text-sm font-semibold text-sky-300">Pembayaran dikonfirmasi</p>
+            <p className="mt-0.5 text-xs text-gold-200/40">
+              {split.is_ready_stock
+                ? "Seller akan segera memproses dan mengirim pesanan kamu."
+                : "Menunggu semua slot terisi, lalu seller akan mulai proses decant."}
             </p>
           </div>
         </div>
       )}
 
+      {/* DECANTING */}
+      {order.status === "decanting" && (
+        <div className="flex items-start gap-3 rounded-xl border border-indigo-500/20 bg-indigo-500/5 p-4">
+          <FlaskConical size={20} className="mt-0.5 flex-shrink-0 text-indigo-400" />
+          <div>
+            <p className="text-sm font-semibold text-indigo-300">Sedang proses decant</p>
+            <p className="mt-0.5 text-xs text-gold-200/40">
+              Seller sedang mem-filling parfum ke botol kecil. Pesanan akan segera dikirim setelah selesai.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* SHIPPED */}
       {order.status === "shipped" && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
-            <Truck size={20} className="flex-shrink-0 text-violet-400" />
-            <div>
-              <p className="text-sm font-medium text-violet-400">Pesanan sedang dikirim</p>
-              {order.shipping_receipt && (
-                <p className="mt-1 font-mono text-sm text-gold-200/60">
-                  Resi: {order.shipping_receipt}
-                </p>
-              )}
+          <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
+            <div className="flex items-center gap-2 text-violet-300">
+              <Truck size={18} />
+              <p className="text-sm font-semibold">Pesanan sedang dikirim</p>
             </div>
+            {order.shipping_receipt && (
+              <div className="mt-3 rounded-lg bg-surface-300/60 px-4 py-3">
+                <p className="text-xs text-gold-200/40">Nomor Resi</p>
+                <div className="mt-1 flex items-center justify-between gap-2">
+                  <p className="font-mono text-base font-bold text-gold-100">
+                    {order.shipping_receipt}
+                  </p>
+                  <CopyButton text={order.shipping_receipt} />
+                </div>
+                {trackingInfo ? (
+                  <a
+                    href={trackingInfo.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 flex items-center gap-1.5 text-xs font-medium text-gold-400 hover:underline"
+                  >
+                    <ExternalLink size={12} />
+                    Lacak di {trackingInfo.courierName}
+                  </a>
+                ) : (
+                  <a
+                    href={`https://cekresi.com/?noresi=${order.shipping_receipt}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 flex items-center gap-1.5 text-xs font-medium text-gold-400 hover:underline"
+                  >
+                    <ExternalLink size={12} />
+                    Lacak Pengiriman
+                  </a>
+                )}
+              </div>
+            )}
           </div>
 
           <button
             onClick={handleConfirmReceived}
             disabled={confirming}
-            className="btn-gold flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-surface-400"
+            className="btn-gold flex w-full items-center justify-center gap-2 rounded-xl py-4 text-sm font-semibold text-surface-400"
           >
             {confirming ? (
               <Loader2 size={16} className="animate-spin" />
             ) : (
               <Package size={16} />
             )}
-            {confirming ? "Memproses..." : "Pesanan Diterima"}
+            {confirming ? "Memproses..." : "Pesanan Sudah Diterima"}
           </button>
-          <p className="text-center text-xs text-gold-200/30">
-            Pesanan akan otomatis selesai 2 hari setelah dikirim.
+          <p className="text-center text-xs text-gold-200/25">
+            Pesanan otomatis selesai 2 hari setelah dikirim jika tidak dikonfirmasi.
           </p>
         </div>
       )}
 
+      {/* COMPLETED */}
       {order.status === "completed" && (
-        <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
-            <CheckCircle2 size={20} className="flex-shrink-0 text-emerald-400" />
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+            <CheckCircle2 size={20} className="mt-0.5 flex-shrink-0 text-emerald-400" />
             <div>
-              <p className="text-sm font-medium text-emerald-400">Pesanan selesai</p>
-              <p className="text-xs text-gold-200/40">
-                Terima kasih telah berbelanja di Wangiverse!
+              <p className="text-sm font-semibold text-emerald-300">Pesanan selesai</p>
+              <p className="mt-0.5 text-xs text-gold-200/40">
+                Terima kasih telah berbelanja di Wangiverse! Bagikan pengalamanmu dengan menulis review.
               </p>
             </div>
           </div>
-
           <Link
             href={`/split/${order.split_id}`}
-            className="flex items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+            className="flex items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
           >
-            <Star size={16} /> Tulis Review
+            <Star size={15} /> Tulis Review
           </Link>
         </div>
       )}
 
+      {/* CANCELLED */}
       {order.status === "cancelled" && (
-        <div className="flex items-center gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-          <XCircle size={20} className="flex-shrink-0 text-red-400" />
+        <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+          <XCircle size={20} className="mt-0.5 flex-shrink-0 text-red-400" />
           <div>
-            <p className="text-sm font-medium text-red-400">Order dibatalkan</p>
-            <p className="text-xs text-gold-200/40">
-              Order dibatalkan karena tidak melakukan pembayaran dalam 1 jam.
+            <p className="text-sm font-semibold text-red-300">Pesanan dibatalkan</p>
+            <p className="mt-0.5 text-xs text-gold-200/40">
+              Order ini dibatalkan karena tidak melakukan pembayaran dalam batas waktu yang ditentukan.
             </p>
-          </div>
-        </div>
-      )}
-
-      {/* Payment Proof Preview */}
-      {order.payment_proof_url && (
-        <div className="mt-6">
-          <p className="mb-2 text-sm font-medium text-gold-200/60">Bukti Pembayaran</p>
-          <div className="relative aspect-[3/4] max-w-[200px] overflow-hidden rounded-xl border border-gold-900/15">
-            <Image src={order.payment_proof_url} alt="Bukti Bayar" fill className="object-cover" />
           </div>
         </div>
       )}
@@ -368,6 +476,57 @@ export function OrderDetailClient({
       {error && (
         <div className="mt-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
           {error}
+        </div>
+      )}
+
+      {/* ── Divider ── */}
+      <div className="my-8 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
+
+      {/* ── Seller Info & Contact ── */}
+      {creator && (
+        <div className="rounded-2xl border border-gold-900/20 bg-surface-200/50 p-5">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
+            Seller
+          </p>
+          <div className="flex items-center gap-3">
+            {creator.avatar_url ? (
+              <Image
+                src={creator.avatar_url}
+                alt=""
+                width={40}
+                height={40}
+                className="rounded-full ring-1 ring-gold-700/30"
+              />
+            ) : (
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gold-400/10 text-gold-400">
+                <Droplets size={18} />
+              </div>
+            )}
+            <div className="flex-1">
+              <p className="font-medium text-gold-100">{creator.name}</p>
+              {creator.city && (
+                <p className="text-xs text-gold-200/30">{creator.city}</p>
+              )}
+            </div>
+            <Link
+              href={`/seller/${split.created_by}`}
+              className="text-xs text-gold-200/30 hover:text-gold-400"
+            >
+              Lihat Toko →
+            </Link>
+          </div>
+
+          {waUrl && (
+            <a
+              href={waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 flex items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/8 py-3 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/15"
+            >
+              <MessageCircle size={16} />
+              Hubungi Seller via WhatsApp
+            </a>
+          )}
         </div>
       )}
     </div>

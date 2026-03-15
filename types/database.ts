@@ -34,6 +34,10 @@ export interface User {
   // store location
   store_province: string | null;
   store_city: string | null;
+  // bank account (untuk info transfer)
+  bank_name: string | null;
+  bank_account_number: string | null;
+  bank_account_name: string | null;
   created_at: string;
 }
 
@@ -82,6 +86,8 @@ export interface Split {
   perfume?: Perfume;
   creator?: User;
   variants?: SplitVariant[];
+  avg_rating?: number | null;
+  review_count?: number | null;
 }
 
 export interface SplitSlot {
@@ -132,4 +138,12 @@ export interface Review {
   created_at: string;
   // joined
   user?: User;
+}
+
+export interface Wishlist {
+  id: string;
+  user_id: string;
+  split_id: string;
+  created_at: string;
+  split?: Split & { perfume?: Perfume; variants?: SplitVariant[] };
 }
