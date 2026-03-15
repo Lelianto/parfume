@@ -1,0 +1,102 @@
+export type SplitStatus = "open" | "full" | "decanting" | "shipped" | "completed";
+export type OrderStatus = "pending_payment" | "paid" | "pending" | "confirmed" | "decanting" | "shipped" | "completed" | "cancelled";
+export type Concentration = "EDP" | "EDT" | "Parfum" | "EDC" | "Cologne";
+export type ScentFamily = "Woody" | "Floral" | "Oriental" | "Fresh" | "Citrus" | "Aquatic" | "Gourmand" | "Aromatic" | "Chypre" | "Fougere";
+
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  avatar_url: string | null;
+  bio: string | null;
+  whatsapp: string | null;
+  city: string | null;
+  created_at: string;
+}
+
+export interface Perfume {
+  id: string;
+  brand: string;
+  name: string;
+  description: string | null;
+  concentration: Concentration | null;
+  top_notes: string[];
+  middle_notes: string[];
+  base_notes: string[];
+  scent_family: string | null;
+  created_at: string;
+}
+
+export interface SplitVariant {
+  id: string;
+  split_id: string;
+  size_ml: number;
+  price: number;
+  stock: number;
+  sold: number;
+}
+
+export interface Split {
+  id: string;
+  perfume_id: string;
+  bottle_size_ml: number;
+  split_size_ml: number;
+  total_slots: number;
+  filled_slots: number;
+  price_per_slot: number;
+  batch_code: string | null;
+  bottle_photo_url: string | null;
+  batch_code_photo_url: string | null;
+  decant_video_url: string | null;
+  status: SplitStatus;
+  is_ready_stock: boolean;
+  is_hidden: boolean;
+  description: string | null;
+  created_by: string;
+  created_at: string;
+  // joined
+  perfume?: Perfume;
+  creator?: User;
+  variants?: SplitVariant[];
+}
+
+export interface SplitSlot {
+  id: string;
+  split_id: string;
+  user_id: string;
+  quantity: number;
+  created_at: string;
+}
+
+export interface Order {
+  id: string;
+  user_id: string;
+  split_id: string;
+  variant_id: string | null;
+  size_ml: number | null;
+  slots_purchased: number;
+  total_price: number;
+  status: OrderStatus;
+  shipping_receipt: string | null;
+  payment_proof_url: string | null;
+  payment_deadline: string | null;
+  shipping_deadline: string | null;
+  confirmed_at: string | null;
+  shipped_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  // joined
+  split?: Split & { perfume?: Perfume };
+  variant?: SplitVariant;
+}
+
+export interface Review {
+  id: string;
+  user_id: string;
+  split_id: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+  // joined
+  user?: User;
+}

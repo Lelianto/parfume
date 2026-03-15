@@ -1,0 +1,119 @@
+import Link from "next/link";
+import Image from "next/image";
+import { ProgressBar } from "./ProgressBar";
+import { SplitStatusBadge } from "./StatusBadge";
+import type { Split } from "@/types/database";
+import { Droplets } from "lucide-react";
+
+function formatRupiah(amount: number): string {
+  return new Intl.NumberFormat("id-ID", {
+    style: "currency",
+    currency: "IDR",
+    minimumFractionDigits: 0,
+  }).format(amount);
+}
+
+export function SplitCard({ split }: { split: Split }) {
+  const variants = split.variants ?? [];
+  const sortedVariants = [...variants].sort((a, b) => a.size_ml - b.size_ml);
+  const hasVariants = sortedVariants.length > 0;
+
+  const totalSold = hasVariants ? variants.reduce((s, v) => s + v.sold, 0) : split.filled_slots;
+  const totalStock = hasVariants ? variants.reduce((s, v) => s + v.stock, 0) : split.total_slots;
+
+  const minPrice = hasVariants ? Math.min(...variants.map((v) => v.price)) : split.price_per_slot;
+  const maxPrice = hasVariants ? Math.max(...variants.map((v) => v.price)) : split.price_per_slot;
+
+  return (
+    <Link href={`/split/${split.id}`}>
+      <div className="card-hover group overflow-hidden rounded-[1.25rem] border border-gold-900/20 bg-surface-200/70">
+        {/* Image */}
+        <div className="relative aspect-[4/5] overflow-hidden bg-surface-300">
+          {split.bottle_photo_url ? (
+            <Image
+              src={split.bottle_photo_url}
+              alt={split.perfume?.name ?? "Parfum"}
+              fill
+              className="object-cover transition-transform duration-700 ease-out group-hover:scale-[1.04]"
+            />
+          ) : (
+            <div className="flex h-full items-center justify-center text-gold-800/20">
+              <Droplets size={44} />
+            </div>
+          )}
+          <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-surface-400/60 to-transparent" />
+          <div className="absolute right-3 top-3">
+            <SplitStatusBadge status={split.status} />
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="p-3 sm:p-5">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gold-400/60 sm:text-[11px]">
+            {split.perfume?.brand}
+          </p>
+          <h3 className="mt-0.5 font-display text-sm font-semibold leading-snug text-gold-100 line-clamp-2 sm:mt-1 sm:text-[1.1rem]">
+            {split.perfume?.name}
+          </h3>
+
+          {/* Concentration badge */}
+          {split.perfume?.concentration && (
+            <span className="mt-1.5 inline-block rounded-full bg-gold-400/10 px-2 py-0.5 text-[10px] font-semibold text-gold-400">
+              {split.perfume.concentration}
+            </span>
+          )}
+
+          {/* Size pills */}
+          {hasVariants && (
+            <div className="mt-2 flex flex-wrap gap-1">
+              {sortedVariants.map((v) => (
+                <span
+                  key={v.id}
+                  className="rounded-md bg-surface-300 px-1.5 py-0.5 text-[10px] font-medium text-gold-200/50 ring-1 ring-gold-900/15"
+                >
+                  {v.size_ml}ml
+                </span>
+              ))}
+            </div>
+          )}
+
+          {!hasVariants && (
+            <p className="mt-1.5 text-xs text-gold-200/30">
+              {split.split_size_ml}ml / {split.bottle_size_ml}ml
+            </p>
+          )}
+
+          <div className="mt-3 sm:mt-4">
+            <ProgressBar
+              filled={totalSold}
+              total={totalStock}
+              size="sm"
+            />
+          </div>
+
+          <div className="mt-3 sm:mt-4">
+            {hasVariants && minPrice !== maxPrice ? (
+              <>
+                <p className="font-display text-base font-bold tracking-tight text-gold-400 sm:text-xl">
+                  {formatRupiah(minPrice)}
+                </p>
+                <p className="mt-0.5 text-[10px] text-gold-200/25 sm:text-[11px]">
+                  {sortedVariants[0].size_ml}ml — {sortedVariants[sortedVariants.length - 1].size_ml}ml
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="font-display text-base font-bold tracking-tight text-gold-400 sm:text-xl">
+                  {formatRupiah(minPrice)}
+                </p>
+                <p className="mt-0.5 text-[10px] text-gold-200/25 sm:text-[11px]">
+                  {hasVariants ? `per ${sortedVariants[0].size_ml}ml` : "per slot"}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}

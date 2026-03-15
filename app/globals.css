@@ -1,0 +1,112 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700&family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-gold-50: #fdf8ef;
+  --color-gold-100: #f5e6c8;
+  --color-gold-200: #e8d5b5;
+  --color-gold-300: #d4b896;
+  --color-gold-400: #c9a96e;
+  --color-gold-500: #b8944d;
+  --color-gold-600: #a07d3a;
+  --color-gold-700: #7d6130;
+  --color-gold-800: #5c4723;
+  --color-gold-900: #3b2e17;
+
+  --color-surface-50: #1a1a1a;
+  --color-surface-100: #161616;
+  --color-surface-200: #111111;
+  --color-surface-300: #0d0d0d;
+  --color-surface-400: #0a0a0a;
+  --color-surface-500: #080808;
+
+  --font-display: "Cormorant Garamond", "Georgia", serif;
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3b2e17 #111111;
+}
+
+body {
+  @apply bg-surface-400 text-gold-100 antialiased font-sans;
+}
+
+/* Subtle noise texture */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+}
+
+/* Smooth card hover — adapted from reference's cubic-bezier motion */
+.card-hover {
+  transition: transform 0.5s cubic-bezier(0.6, 0, 0.4, 1), box-shadow 0.5s cubic-bezier(0.6, 0, 0.4, 1), border-color 0.5s ease;
+}
+.card-hover:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 48px rgba(201, 169, 110, 0.06);
+  border-color: rgba(201, 169, 110, 0.3);
+}
+
+/* Infinite marquee for mobile feature cards */
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.animate-marquee {
+  animation: marquee 20s linear infinite;
+}
+
+/* Gold shimmer for hero text */
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+.gold-shimmer {
+  background: linear-gradient(110deg, #c9a96e 0%, #e8d5b5 25%, #c9a96e 50%, #e8d5b5 75%, #c9a96e 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer 4s linear infinite;
+}
+
+/* Gold gradient button */
+.btn-gold {
+  background: linear-gradient(135deg, #c9a96e 0%, #b8944d 50%, #a07d3a 100%);
+  transition: all 0.3s cubic-bezier(0.6, 0, 0.4, 1);
+}
+.btn-gold:hover {
+  background: linear-gradient(135deg, #d4b896 0%, #c9a96e 50%, #b8944d 100%);
+  box-shadow: 0 4px 24px rgba(201, 169, 110, 0.25);
+}
+.btn-gold:disabled {
+  opacity: 0.5;
+}
+
+/* Dark input */
+.input-dark {
+  @apply w-full rounded-xl border border-gold-900/50 bg-surface-200 px-4 py-3 text-sm text-gold-100 placeholder-gold-800/60;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.input-dark:focus {
+  @apply border-gold-400/50 outline-none;
+  box-shadow: 0 0 0 3px rgba(201, 169, 110, 0.08);
+}
+
+/* Custom select arrow with proper spacing */
+select.input-dark {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23c9a96e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+}
