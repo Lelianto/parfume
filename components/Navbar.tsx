@@ -24,9 +24,9 @@ import {
 export function Navbar() {
   const [user, setUser] = useState<User | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [supabase] = useState(() => createClient());
   const pathname = usePathname();
   const isAdminPage = pathname.startsWith("/admin");
-  const supabase = createClient();
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));

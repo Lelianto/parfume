@@ -97,10 +97,13 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
     setAddressVillage("");
     if (!provId) return;
     setLoadingAddress(true);
-    const res = await fetch(`/api/address?type=regencies&id=${provId}`);
-    const data = await res.json();
-    setCities(data);
-    setLoadingAddress(false);
+    try {
+      const res = await fetch(`/api/address?type=regencies&id=${provId}`);
+      const data = await res.json();
+      setCities(data);
+    } finally {
+      setLoadingAddress(false);
+    }
   }, []);
 
   const fetchDistricts = useCallback(async (cId: string) => {
@@ -111,10 +114,13 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
     setAddressVillage("");
     if (!cId) return;
     setLoadingAddress(true);
-    const res = await fetch(`/api/address?type=districts&id=${cId}`);
-    const data = await res.json();
-    setDistricts(data);
-    setLoadingAddress(false);
+    try {
+      const res = await fetch(`/api/address?type=districts&id=${cId}`);
+      const data = await res.json();
+      setDistricts(data);
+    } finally {
+      setLoadingAddress(false);
+    }
   }, []);
 
   const fetchStoreCities = useCallback(async (provId: string) => {
@@ -145,10 +151,13 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
     setAddressVillage("");
     if (!dId) return;
     setLoadingAddress(true);
-    const res = await fetch(`/api/address?type=villages&id=${dId}`);
-    const data = await res.json();
-    setVillages(data);
-    setLoadingAddress(false);
+    try {
+      const res = await fetch(`/api/address?type=villages&id=${dId}`);
+      const data = await res.json();
+      setVillages(data);
+    } finally {
+      setLoadingAddress(false);
+    }
   }, []);
 
   function handleProvinceChange(provId: string) {
@@ -586,7 +595,7 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
 
       <div className="my-8 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
 
-      {/* Error / Success */
+      {/* Error / Success */}
       {error && (
         <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
           {error}

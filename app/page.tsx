@@ -20,35 +20,25 @@ export default async function HomePage({
     .from("splits")
     .select("*, perfume:perfumes(*), variants:split_variants(*), reviews:reviews(rating)");
 
-  // Search filter
+  // Search filter — sanitize to prevent PostgREST filter injection
   if (params.q) {
-    query = query.or(
-      `brand.ilike.%${params.q}%,name.ilike.%${params.q}%`,
-      { referencedTable: "perfumes" }
-    );
+    const safeQ = params.q.replace(/[%_,.()"'\\]/g, "");
+    if (safeQ) {
+      query = query.or(
+        `brand.ilike.%${safeQ}%,name.ilike.%${safeQ}%`,
+        { referencedTable: "perfumes" }
+      );
+    }
   }
 
-  // Brand filter
-  if (params.brand) {
-    query = query.eq("perfume.brand", params.brand);
+  // Price filter — validate numeric
+  const priceMin = Number(params.price_min);
+  if (params.price_min && !isNaN(priceMin)) {
+    query = query.gte("price_per_slot", priceMin);
   }
-
-  // Concentration filter
-  if (params.concentration) {
-    query = query.eq("perfume.concentration", params.concentration);
-  }
-
-  // Scent family filter
-  if (params.scent) {
-    query = query.eq("perfume.scent_family", params.scent);
-  }
-
-  // Price filter
-  if (params.price_min) {
-    query = query.gte("price_per_slot", Number(params.price_min));
-  }
-  if (params.price_max) {
-    query = query.lte("price_per_slot", Number(params.price_max));
+  const priceMax = Number(params.price_max);
+  if (params.price_max && !isNaN(priceMax)) {
+    query = query.lte("price_per_slot", priceMax);
   }
 
   // Sort
@@ -62,9 +52,15 @@ export default async function HomePage({
 
   const { data: splits } = await query;
 
-  // Filter out splits where perfume is null or split is hidden
+  // Filter out hidden splits + apply brand/concentration/scent filters in-memory
+  // (PostgREST .eq() on joined table columns is silently ignored)
   const activeSplits = ((splits ?? []) as unknown as Split[]).filter(
-    (s) => s.perfume && !s.is_hidden
+    (s) =>
+      s.perfume &&
+      !s.is_hidden &&
+      (!params.brand || s.perfume.brand === params.brand) &&
+      (!params.concentration || s.perfume.concentration === params.concentration) &&
+      (!params.scent || s.perfume.scent_family === params.scent)
   );
 
   // Get distinct brands for filter dropdown
@@ -76,10 +72,10 @@ export default async function HomePage({
   const brands = [...new Set((brandsData ?? []).map((b) => b.brand))];
 
   // Compute avg_rating per split from joined reviews
-  const splitsWithRating = activeSplits.map((s: any) => {
-    const reviews: { rating: number }[] = s.reviews ?? [];
+  const splitsWithRating = activeSplits.map((s) => {
+    const reviews: { rating: number }[] = (s as Split & { reviews?: { rating: number }[] }).reviews ?? [];
     const avg = reviews.length > 0
-      ? reviews.reduce((sum: number, r: { rating: number }) => sum + r.rating, 0) / reviews.length
+      ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
       : null;
     return { ...s, avg_rating: avg, review_count: reviews.length || null };
   });

@@ -1,7 +1,6 @@
 import { ImageResponse } from "next/og";
 import { createClient } from "@/lib/supabase/server";
 
-export const runtime = "edge";
 export const alt = "Split Parfum di Wangiverse";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -66,7 +65,6 @@ export default async function OgImage({
           }}
         >
           {split?.bottle_photo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={split.bottle_photo_url}
               alt=""

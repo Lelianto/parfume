@@ -59,7 +59,6 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
       {STEPS.map((step, i) => {
         const isDone = i < currentIndex;
         const isActive = i === currentIndex;
-        const isPending = i > currentIndex;
 
         return (
           <div key={i} className="flex gap-4">

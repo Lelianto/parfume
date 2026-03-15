@@ -33,6 +33,7 @@ function useCountdown(deadline: string | null) {
 
   useEffect(() => {
     if (!deadline) return;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     function update() {
       const now = Date.now();
@@ -42,6 +43,7 @@ function useCountdown(deadline: string | null) {
       if (diff <= 0) {
         setTimeLeft("00:00");
         setExpired(true);
+        if (interval) clearInterval(interval);
         return;
       }
 
@@ -51,8 +53,8 @@ function useCountdown(deadline: string | null) {
     }
 
     update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
+    interval = setInterval(update, 1000);
+    return () => { if (interval) clearInterval(interval); };
   }, [deadline]);
 
   return { timeLeft, expired };
@@ -62,9 +64,13 @@ function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
   async function handleCopy() {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard not available (e.g. non-secure context)
+    }
   }
 
   return (

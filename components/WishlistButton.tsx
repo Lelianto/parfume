@@ -24,18 +24,19 @@ export function WishlistButton({ splitId, initialWishlisted, isLoggedIn }: Wishl
       return;
     }
 
+    const targetState = !wishlisted;
     setLoading(true);
-    setWishlisted((prev) => !prev);
+    setWishlisted(targetState);
 
     try {
       const res = await fetch("/api/wishlist", {
-        method: wishlisted ? "DELETE" : "POST",
+        method: targetState ? "POST" : "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ split_id: splitId }),
       });
-      if (!res.ok) setWishlisted((prev) => !prev);
+      if (!res.ok) setWishlisted(!targetState);
     } catch {
-      setWishlisted((prev) => !prev);
+      setWishlisted(!targetState);
     } finally {
       setLoading(false);
     }

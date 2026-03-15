@@ -19,8 +19,8 @@ export default async function WishlistPage() {
     .order("created_at", { ascending: false });
 
   const splits = (wishlists ?? [])
-    .map((w) => w.split)
-    .filter((s): s is Split => !!s && !!s.perfume && !s.is_hidden);
+    .map((w) => w.split as unknown as Split)
+    .filter((s) => !!s && !!s.perfume && !s.is_hidden);
 
   const wishlistedIds = splits.map((s) => s.id);
 
