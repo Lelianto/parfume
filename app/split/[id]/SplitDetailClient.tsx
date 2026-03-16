@@ -6,8 +6,10 @@ import { useRouter } from "next/navigation";
 import { ProgressBar } from "@/components/ProgressBar";
 import { SplitStatusBadge } from "@/components/StatusBadge";
 import { JoinSplitModal } from "@/components/JoinSplitModal";
+import { AddToCartModal } from "@/components/AddToCartModal";
 import { ReviewList } from "@/components/ReviewList";
 import { FragranceNotes } from "@/components/FragranceNotes";
+import RichTextDisplay from "@/components/RichTextDisplay";
 import type { Split, SplitVariant, Order, Review } from "@/types/database";
 import {
   Droplets,
@@ -24,6 +26,7 @@ import {
   Eye,
   EyeOff,
   MapPin,
+  ShoppingCart,
 } from "lucide-react";
 import Link from "next/link";
 import { formatRupiah } from "@/lib/utils";
@@ -52,6 +55,7 @@ export function SplitDetailClient({
     sortedVariants[0] ?? null
   );
   const [showModal, setShowModal] = useState(false);
+  const [showCartModal, setShowCartModal] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [shippingReceipt, setShippingReceipt] = useState<Record<string, string>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -343,7 +347,7 @@ export function SplitDetailClient({
           </div>
 
           {split.description && (
-            <p className="mt-6 text-sm leading-relaxed text-gold-200/40">{split.description}</p>
+            <RichTextDisplay html={split.description} className="mt-6" />
           )}
 
           {/* Trust indicators */}
@@ -370,17 +374,38 @@ export function SplitDetailClient({
             <div className="mt-8">
               {isLoggedIn ? (
                 hasOrder ? (
-                  <p className="text-sm font-medium text-emerald-400">
-                    Kamu sudah bergabung di split ini.
-                  </p>
+                  <div className="space-y-3">
+                    <p className="text-sm font-medium text-emerald-400">
+                      Kamu sudah bergabung di split ini.
+                    </p>
+                    {/* Still allow add to cart for different variants */}
+                    {selectedVariant && (selectedVariant.stock - selectedVariant.sold) > 0 && (
+                      <button
+                        onClick={() => setShowCartModal(true)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+                      >
+                        <ShoppingCart size={16} /> Tambah ke Keranjang
+                      </button>
+                    )}
+                  </div>
                 ) : (
-                  <button
-                    onClick={() => setShowModal(true)}
-                    disabled={!selectedVariant || (selectedVariant.stock - selectedVariant.sold) <= 0}
-                    className="btn-gold w-full rounded-xl py-4 text-sm font-semibold text-surface-400 disabled:opacity-40"
-                  >
-                    {selectedVariant ? `Beli ${selectedVariant.size_ml}ml — ${formatRupiah(selectedVariant.price)}` : "Pilih ukuran terlebih dahulu"}
-                  </button>
+                  <div className="space-y-3">
+                    <button
+                      onClick={() => setShowModal(true)}
+                      disabled={!selectedVariant || (selectedVariant.stock - selectedVariant.sold) <= 0}
+                      className="btn-gold w-full rounded-xl py-4 text-sm font-semibold text-surface-400 disabled:opacity-40"
+                    >
+                      {selectedVariant ? `Beli ${selectedVariant.size_ml}ml — ${formatRupiah(selectedVariant.price)}` : "Pilih ukuran terlebih dahulu"}
+                    </button>
+                    {selectedVariant && (selectedVariant.stock - selectedVariant.sold) > 0 && (
+                      <button
+                        onClick={() => setShowCartModal(true)}
+                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+                      >
+                        <ShoppingCart size={16} /> Tambah ke Keranjang
+                      </button>
+                    )}
+                  </div>
                 )
               ) : (
                 <Link
@@ -591,6 +616,14 @@ export function SplitDetailClient({
             setShowModal(false);
             router.refresh();
           }}
+        />
+      )}
+
+      {showCartModal && selectedVariant && (
+        <AddToCartModal
+          split={split}
+          variant={selectedVariant}
+          onClose={() => setShowCartModal(false)}
         />
       )}
 

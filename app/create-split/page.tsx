@@ -8,6 +8,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { TagInput } from "@/components/TagInput";
 import { ComboBox } from "@/components/ComboBox";
+import RichTextEditor from "@/components/RichTextEditor";
 import type { Concentration } from "@/types/database";
 
 interface VariantRow {
@@ -41,7 +42,6 @@ interface SplitDraft {
 
 const DRAFT_KEY = "split_draft";
 const CONCENTRATIONS: Concentration[] = ["EDP", "EDT", "Parfum", "EDC", "Cologne"];
-const SCENT_FAMILIES = ["Woody", "Floral", "Oriental", "Fresh", "Citrus", "Aquatic", "Gourmand", "Aromatic", "Chypre", "Fougere"];
 
 const STEPS = [
   { num: 1, label: "Informasi Parfum" },
@@ -706,12 +706,10 @@ export default function CreateSplitPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Deskripsi</label>
-                  <textarea
+                  <RichTextEditor
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
+                    onChange={setDescription}
                     placeholder="Deskripsi parfum"
-                    rows={3}
-                    className="input-dark mt-1"
                   />
                 </div>
               </div>
@@ -967,26 +965,6 @@ export default function CreateSplitPage() {
               <p className="mt-1 text-xs text-gold-200/30">Opsional — bantu buyer mengenal profil aroma</p>
 
               <div className="mt-4 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gold-200/60">Scent Family</label>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
-                    {SCENT_FAMILIES.map((sf) => (
-                      <button
-                        key={sf}
-                        type="button"
-                        onClick={() => setScentFamily(scentFamily === sf ? "" : sf)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                          scentFamily === sf
-                            ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
-                            : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
-                        }`}
-                      >
-                        {sf}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
                 {(["top", "middle", "base"] as const).map((type) => {
                   const notes = type === "top" ? topNotes : type === "middle" ? middleNotes : baseNotes;
                   const label = type === "top" ? "Top Notes" : type === "middle" ? "Middle Notes" : "Base Notes";

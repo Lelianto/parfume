@@ -7,7 +7,7 @@ import Image from "next/image";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import { MiniOrderProgress } from "@/components/MiniOrderProgress";
 import { formatRupiah } from "@/lib/utils";
-import type { Order } from "@/types/database";
+import type { Order, OrderGroup } from "@/types/database";
 import type { SellerOrder } from "./page";
 import {
   Package,
@@ -15,6 +15,7 @@ import {
   Clock,
   ClipboardList,
   ShoppingBag,
+  Layers,
 } from "lucide-react";
 
 type Tab = "purchases" | "sales";
@@ -36,10 +37,12 @@ const FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
 
 export function OrdersClient({
   buyerOrders,
+  orderGroups = [],
   sellerOrders,
   hasSplits,
 }: {
   buyerOrders: Order[];
+  orderGroups?: OrderGroup[];
   sellerOrders: SellerOrder[];
   hasSplits: boolean;
 }) {
@@ -118,7 +121,7 @@ export function OrdersClient({
       {/* Purchases Tab */}
       {tab === "purchases" && (
         <>
-          {buyerOrders.length === 0 ? (
+          {buyerOrders.length === 0 && orderGroups.length === 0 ? (
             <div className="mt-12 rounded-2xl border border-dashed border-gold-900/30 py-16 text-center">
               <Droplets size={48} className="mx-auto text-gold-800/30" />
               <p className="mt-4 text-gold-200/50">Belum ada pesanan.</p>
@@ -131,6 +134,64 @@ export function OrdersClient({
             </div>
           ) : (
             <div className="mt-6 space-y-3">
+              {/* Order Groups */}
+              {orderGroups.map((group) => {
+                const groupOrders = group.orders ?? [];
+                return (
+                  <Link key={group.id} href={`/order-group/${group.id}`}>
+                    <div className="card-glow rounded-2xl border border-gold-900/20 bg-surface-200/80 p-4 transition-all">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400/10">
+                            <Layers size={18} className="text-gold-400" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gold-100">
+                              Pesanan Group · {groupOrders.length} item
+                            </p>
+                            <p className="text-xs text-gold-200/40">
+                              {group.seller?.name || "Seller"}
+                            </p>
+                          </div>
+                        </div>
+                        <OrderStatusBadge status={group.status} />
+                      </div>
+                      {/* Show first 2 items as preview */}
+                      <div className="mt-3 flex gap-2">
+                        {groupOrders.slice(0, 3).map((order) => (
+                          <div key={order.id} className="relative h-12 w-12 overflow-hidden rounded-lg border border-gold-900/10 bg-surface-300">
+                            {order.split?.bottle_photo_url ? (
+                              <Image src={order.split.bottle_photo_url} alt="" fill className="object-cover" />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-gold-800/30">
+                                <Droplets size={14} />
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {groupOrders.length > 3 && (
+                          <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-gold-900/10 bg-surface-300 text-xs text-gold-200/40">
+                            +{groupOrders.length - 3}
+                          </div>
+                        )}
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <span className="text-sm font-semibold text-gold-400">
+                          {formatRupiah(group.total_product_price + group.shipping_cost)}
+                        </span>
+                        {group.status === "pending_payment" && group.payment_deadline && (
+                          <div className="flex items-center gap-1 text-xs text-orange-400">
+                            <Clock size={11} />
+                            <span>Bayar sebelum {new Date(group.payment_deadline).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+
+              {/* Individual Orders (non-grouped) */}
               {buyerOrders.map((order) => (
                 <Link key={order.id} href={`/my-orders/${order.id}`}>
                   <div className="card-glow flex gap-4 rounded-2xl border border-gold-900/20 bg-surface-200/80 p-4 transition-all">

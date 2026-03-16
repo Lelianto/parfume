@@ -145,10 +145,39 @@ export interface Order {
   // escrow
   disbursement_status: string | null;
   disbursed_at: string | null;
+  // order group
+  order_group_id: string | null;
   created_at: string;
   // joined
   split?: Split & { perfume?: Perfume };
   variant?: SplitVariant;
+}
+
+export interface OrderGroup {
+  id: string;
+  user_id: string;
+  seller_id: string;
+  status: OrderStatus;
+  total_product_price: number;
+  shipping_cost: number;
+  shipping_courier: string | null;
+  shipping_service: string | null;
+  shipping_receipt: string | null;
+  payment_proof_url: string | null;
+  payment_deadline: string | null;
+  shipping_name: string | null;
+  shipping_phone: string | null;
+  shipping_province: string | null;
+  shipping_city: string | null;
+  shipping_district: string | null;
+  shipping_village: string | null;
+  shipping_postal_code: string | null;
+  shipping_address: string | null;
+  shipping_city_id: number | null;
+  created_at: string;
+  // joined
+  orders?: (Order & { split?: Split & { perfume?: Perfume }; variant?: SplitVariant })[];
+  seller?: User;
 }
 
 export interface Review {

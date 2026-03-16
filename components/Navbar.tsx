@@ -18,7 +18,9 @@ import {
   ArrowLeft,
   UserCircle,
   Bookmark,
+  ShoppingCart,
 } from "lucide-react";
+import { CartButton } from "@/components/CartButton";
 
 export function Navbar() {
   const [user, setUser] = useState<User | null>(null);
@@ -62,6 +64,7 @@ export function Navbar() {
         { href: "/", label: "Jelajahi", icon: Compass },
         { href: "/create-split", label: "Buat Split", icon: PlusCircle },
         { href: "/wishlist", label: "Wishlist", icon: Bookmark },
+        { href: "/cart", label: "Keranjang", icon: ShoppingCart },
         { href: "/orders", label: "Pesanan", icon: Package },
         { href: `/seller/${user.id}`, label: "Toko Saya", icon: Store },
         { href: "/profile", label: "Profil", icon: UserCircle },
@@ -79,43 +82,40 @@ export function Navbar() {
             wangiverse
           </Link>
 
-          <div className="flex items-center gap-8">
-            <Link
-              href="/"
-              className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
-            >
-              Jelajahi
-            </Link>
-            {user && !isAdminPage && (
-              <>
+          <div className="flex items-center gap-1">
+            {[
+              { href: "/", label: "Jelajahi" },
+              ...(user && !isAdminPage
+                ? [
+                    { href: "/create-split", label: "Buat Split" },
+                    { href: "/wishlist", label: "Wishlist" },
+                    { href: "/orders", label: "Pesanan" },
+                    { href: `/seller/${user.id}`, label: "Toko Saya" },
+                    { href: "/profile", label: "Profil" },
+                  ]
+                : []),
+            ].map((item) => {
+              const isActive =
+                item.href === "/"
+                  ? pathname === "/"
+                  : pathname.startsWith(item.href);
+              return (
                 <Link
-                  href="/create-split"
-                  className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
+                  key={item.href}
+                  href={item.href}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    isActive
+                      ? "bg-gold-400/15 text-gold-400"
+                      : "text-gold-200/70 hover:bg-gold-900/30 hover:text-gold-400"
+                  }`}
                 >
-                  Buat Split
+                  {item.label}
                 </Link>
-                <Link
-                  href="/orders"
-                  className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
-                >
-                  Pesanan
-                </Link>
-                <Link
-                  href={`/seller/${user.id}`}
-                  className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
-                >
-                  Toko Saya
-                </Link>
-                <Link
-                  href="/profile"
-                  className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
-                >
-                  Profil
-                </Link>
-              </>
-            )}
+              );
+            })}
             {user ? (
               <div className="flex items-center gap-3">
+                <CartButton />
                 {user.user_metadata?.avatar_url && (
                   <Image
                     src={user.user_metadata.avatar_url}

@@ -27,7 +27,7 @@ export function SplitCard({ split, isLoggedIn = false, wishlisted = false }: Spl
 
   return (
     <Link href={`/split/${split.id}`}>
-      <div className="card-hover group overflow-hidden rounded-[1.25rem] border border-gold-900/20 bg-surface-200/70">
+      <div className="card-hover group flex h-full flex-col overflow-hidden rounded-[1.25rem] border border-gold-900/20 bg-surface-200/70">
         {/* Image */}
         <div className="relative aspect-[4/5] overflow-hidden bg-surface-300">
           {split.bottle_photo_url ? (
@@ -69,7 +69,7 @@ export function SplitCard({ split, isLoggedIn = false, wishlisted = false }: Spl
         </div>
 
         {/* Content */}
-        <div className="p-3 sm:p-5">
+        <div className="flex flex-1 flex-col p-3 sm:p-5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.15em] text-gold-400/60 sm:text-[11px]">
             {split.perfume?.brand}
           </p>
@@ -111,7 +111,7 @@ export function SplitCard({ split, isLoggedIn = false, wishlisted = false }: Spl
             <ProgressBar filled={totalSold} total={totalStock} size="sm" />
           </div>
 
-          <div className="mt-3 sm:mt-4">
+          <div className="mt-auto pt-3 sm:pt-4">
             {hasVariants && minPrice !== maxPrice ? (
               <>
                 <p className="font-display text-base font-bold tracking-tight text-gold-400 sm:text-xl">

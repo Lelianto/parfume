@@ -12,6 +12,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  icons: { icon: "/icon.svg" },
   title: "Wangiverse - Split Parfum Premium",
   description:
     "Platform split parfum original premium. Nikmati wangi mewah dengan harga terjangkau.",
