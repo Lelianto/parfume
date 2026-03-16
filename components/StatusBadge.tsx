@@ -17,6 +17,7 @@ const orderStatusConfig: Record<OrderStatus, { label: string; className: string 
   shipped: { label: "Dikirim", className: "bg-violet-500/15 text-violet-400 ring-violet-500/20" },
   completed: { label: "Selesai", className: "bg-emerald-500/15 text-emerald-400 ring-emerald-500/20" },
   cancelled: { label: "Dibatalkan", className: "bg-red-500/15 text-red-400 ring-red-500/20" },
+  rejected: { label: "Ditolak", className: "bg-rose-500/15 text-rose-400 ring-rose-500/20" },
 };
 
 export function SplitStatusBadge({ status }: { status: SplitStatus }) {

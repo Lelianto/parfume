@@ -83,7 +83,7 @@ export default async function SplitDetailPage({ params }: Props) {
       .select("id, status")
       .eq("split_id", id)
       .eq("user_id", user.id);
-    hasOrder = (userOrders?.length ?? 0) > 0;
+    hasOrder = userOrders?.some((o) => !["cancelled", "completed", "rejected"].includes(o.status)) ?? false;
     hasCompletedOrder = userOrders?.some((o) => o.status === "completed") ?? false;
 
     const { count: reviewCount } = await supabase

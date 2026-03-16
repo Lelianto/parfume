@@ -89,9 +89,9 @@ export function SplitDetailClient({
     router.refresh();
   }
 
-  const activeOrders = orders.filter((o) => o.status !== "cancelled");
+  const activeOrders = orders.filter((o) => o.status !== "cancelled" && o.status !== "rejected");
   const allConfirmed = activeOrders.length > 0 && activeOrders.every((o) => o.status === "confirmed");
-  const hasActiveOrders = activeOrders.some((o) => !["cancelled", "completed"].includes(o.status));
+  const hasActiveOrders = activeOrders.some((o) => !["cancelled", "completed", "rejected"].includes(o.status));
 
   async function handleToggleVisibility() {
     setActionLoading("visibility");

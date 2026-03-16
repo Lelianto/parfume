@@ -11,7 +11,7 @@ const STEPS = [
 
 
 export function MiniOrderProgress({ status }: { status: OrderStatus }) {
-  if (status === "cancelled") return null;
+  if (status === "cancelled" || status === "rejected") return null;
 
   const effectiveIdx = STEPS.findIndex((s) => s.key === status);
 

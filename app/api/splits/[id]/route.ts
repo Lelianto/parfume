@@ -64,6 +64,9 @@ export async function PATCH(
       middleNotes,
       baseNotes,
       scentFamily,
+      brandType,
+      gender,
+      scentClassification,
       bottlePhotoUrl,
       batchCodePhotoUrl,
       decantVideoUrl,
@@ -83,6 +86,9 @@ export async function PATCH(
           middle_notes: middleNotes ?? [],
           base_notes: baseNotes ?? [],
           scent_family: scentFamily || null,
+          brand_type: brandType || null,
+          gender: gender || null,
+          scent_classification: scentClassification || null,
         })
         .eq("id", split.perfume_id);
 
@@ -224,7 +230,7 @@ export async function DELETE(
     .from("orders")
     .select("id", { count: "exact", head: true })
     .eq("split_id", id)
-    .not("status", "in", '("cancelled","completed")');
+    .not("status", "in", '("cancelled","completed","rejected")');
 
   if ((count ?? 0) > 0) {
     return NextResponse.json(

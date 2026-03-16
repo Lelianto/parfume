@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { OrderStatusBadge } from "@/components/StatusBadge";
 import type { AdminOrder } from "./page";
 import type { PlatformSettings } from "@/types/database";
@@ -21,6 +22,7 @@ import {
   Save,
   ArrowDownToLine,
   Wallet,
+  AlertTriangle,
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 
@@ -33,7 +35,59 @@ function formatDate(dateStr: string): string {
   });
 }
 
-type Filter = "needs_verification" | "pending_payment" | "withdrawals" | "all" | "confirmed" | "shipped" | "completed" | "cancelled";
+// ── Custom Modal ──
+
+interface ModalState {
+  open: boolean;
+  title: string;
+  message: string;
+  type: "confirm" | "alert";
+  onConfirm?: () => void;
+}
+
+const MODAL_INITIAL: ModalState = { open: false, title: "", message: "", type: "alert" };
+
+function AdminModal({ modal, onClose }: { modal: ModalState; onClose: () => void }) {
+  if (!modal.open) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm rounded-2xl border border-gold-900/20 bg-surface-200 p-6 shadow-2xl">
+        <div className="flex items-start gap-3">
+          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${
+            modal.type === "confirm" ? "bg-orange-500/15" : "bg-red-500/15"
+          }`}>
+            <AlertTriangle size={20} className={modal.type === "confirm" ? "text-orange-400" : "text-red-400"} />
+          </div>
+          <div className="flex-1">
+            <p className="font-display text-sm font-semibold text-gold-100">{modal.title}</p>
+            <p className="mt-1 text-sm text-gold-200/50">{modal.message}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 flex gap-2 justify-end">
+          <button
+            onClick={onClose}
+            className="rounded-xl border border-gold-900/30 px-4 py-2 text-sm text-gold-200/50 transition-colors hover:bg-surface-300"
+          >
+            {modal.type === "confirm" ? "Batal" : "Tutup"}
+          </button>
+          {modal.type === "confirm" && modal.onConfirm && (
+            <button
+              onClick={() => { modal.onConfirm!(); onClose(); }}
+              className="rounded-xl bg-red-500/15 px-4 py-2 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/25"
+            >
+              Ya, Lanjutkan
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+type Filter = "needs_verification" | "pending_payment" | "withdrawals" | "all" | "confirmed" | "shipped" | "completed" | "cancelled" | "rejected";
 
 const ORDER_FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "Semua" },
@@ -43,6 +97,7 @@ const ORDER_FILTERS: { value: Filter; label: string }[] = [
   { value: "shipped", label: "Dikirim" },
   { value: "completed", label: "Selesai" },
   { value: "cancelled", label: "Dibatalkan" },
+  { value: "rejected", label: "Ditolak" },
 ];
 
 const FINANCE_FILTERS: { value: Filter; label: string }[] = [
@@ -66,6 +121,23 @@ export function AdminDashboardClient({
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState("");
   const [rejectingId, setRejectingId] = useState<string | null>(null);
+
+  // Order rejection
+  const [rejectingOrderId, setRejectingOrderId] = useState<string | null>(null);
+  const [orderRejectReason, setOrderRejectReason] = useState("");
+  const [orderRejectCustom, setOrderRejectCustom] = useState("");
+
+  // Custom modal (replaces native confirm/alert)
+  const [modal, setModal] = useState<ModalState>(MODAL_INITIAL);
+  const closeModal = useCallback(() => setModal(MODAL_INITIAL), []);
+
+  function showAlert(title: string, message: string) {
+    setModal({ open: true, title, message, type: "alert" });
+  }
+
+  function showConfirm(title: string, message: string, onConfirm: () => void) {
+    setModal({ open: true, title, message, type: "confirm", onConfirm });
+  }
 
   // Platform settings form
   const [bankName, setBankName] = useState(initialSettings?.bank_name ?? "");
@@ -102,68 +174,82 @@ export function AdminDashboardClient({
       } catch {
         errMsg = `Server error (${res.status})`;
       }
-      alert(errMsg);
+      showAlert("Gagal", errMsg);
     }
 
     setActionLoading(null);
     router.refresh();
   }
 
-  async function handleReject(orderId: string) {
-    if (!confirm("Tolak pembayaran ini? Order akan dibatalkan.")) return;
-    setActionLoading(orderId + "reject");
+  function handleReject(orderId: string, reason: string) {
+    if (!reason.trim()) return;
+    showConfirm(
+      "Tolak Pembayaran",
+      "Tolak pembayaran ini? Order akan dibatalkan dan alasan penolakan akan ditampilkan kepada pembeli.",
+      async () => {
+        setActionLoading(orderId + "reject");
 
-    const res = await fetch(`/api/admin/orders/${orderId}/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "reject" }),
-    });
+        const res = await fetch(`/api/admin/orders/${orderId}/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "reject", reason: reason.trim() }),
+        });
 
-    if (!res.ok) {
-      let errMsg = "Gagal menolak";
-      try {
-        const data = await res.json();
-        errMsg = data.error || errMsg;
-      } catch {
-        errMsg = `Server error (${res.status})`;
+        if (!res.ok) {
+          let errMsg = "Gagal menolak";
+          try {
+            const data = await res.json();
+            errMsg = data.error || errMsg;
+          } catch {
+            errMsg = `Server error (${res.status})`;
+          }
+          showAlert("Gagal", errMsg);
+        }
+
+        setActionLoading(null);
+        setRejectingOrderId(null);
+        setOrderRejectReason("");
+        setOrderRejectCustom("");
+        router.refresh();
       }
-      alert(errMsg);
-    }
-
-    setActionLoading(null);
-    router.refresh();
+    );
   }
 
-  async function handleWithdrawalAction(withdrawalId: string, action: string, adminNote?: string) {
+  function handleWithdrawalAction(withdrawalId: string, action: string, adminNote?: string) {
     const confirmMsg =
       action === "approve" ? "Approve penarikan ini?" :
-      action === "complete" ? "Tandai dana sudah ditransfer ke seller?" :
-      action === "reject" ? "Tolak penarikan ini?" : "";
-    if (!confirm(confirmMsg)) return;
+        action === "complete" ? "Tandai dana sudah ditransfer ke seller?" :
+          action === "reject" ? "Tolak penarikan ini?" : "";
 
-    setActionLoading(withdrawalId + action);
+    showConfirm(
+      "Konfirmasi",
+      confirmMsg,
+      async () => {
+        setActionLoading(withdrawalId + action);
 
-    const res = await fetch(`/api/admin/withdrawals/${withdrawalId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action, admin_note: adminNote }),
-    });
+        const res = await fetch(`/api/admin/withdrawals/${withdrawalId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action, admin_note: adminNote }),
+        });
 
-    if (!res.ok) {
-      let errMsg = "Gagal memproses";
-      try {
-        const data = await res.json();
-        errMsg = data.error || errMsg;
-      } catch {
-        errMsg = `Server error (${res.status})`;
+        if (!res.ok) {
+          let errMsg = "Gagal memproses";
+          try {
+            const data = await res.json();
+            errMsg = data.error || errMsg;
+          } catch {
+            errMsg = `Server error (${res.status})`;
+          }
+          showAlert("Gagal", errMsg);
+        }
+
+        setActionLoading(null);
+        setRejectingId(null);
+        setRejectNote("");
+        router.refresh();
       }
-      alert(errMsg);
-    }
-
-    setActionLoading(null);
-    setRejectingId(null);
-    setRejectNote("");
-    router.refresh();
+    );
   }
 
   async function handleSaveSettings() {
@@ -233,10 +319,9 @@ export function AdminDashboardClient({
         </div>
         <div className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4">
           <p className="text-xs text-gold-200/40">API Tracking</p>
-          <p className={`mt-1 font-display text-2xl font-bold ${
-            trackingUsageCount > 500 ? "text-red-400" : trackingUsageCount >= 400 ? "text-yellow-400" : "text-emerald-400"
-          }`}>
-            {trackingUsageCount}<span className="text-sm font-normal text-gold-200/30">/500</span>
+          <p className={`mt-1 font-display text-2xl font-bold ${trackingUsageCount > 500 ? "text-red-400" : trackingUsageCount >= 400 ? "text-yellow-400" : "text-emerald-400"
+            }`}>
+            {trackingUsageCount}<span className="text-sm font-normal text-gold-200/30">/100/hari</span>
           </p>
         </div>
       </div>
@@ -296,6 +381,17 @@ export function AdminDashboardClient({
         </div>
       </div>
 
+      {/* Quick links */}
+      <div className="mt-4">
+        <Link
+          href="/admin/form-options"
+          className="inline-flex items-center gap-2 rounded-lg bg-surface-200/60 px-4 py-2 text-xs font-medium text-gold-200/50 ring-1 ring-gold-900/20 transition-colors hover:text-gold-400 hover:ring-gold-700/40"
+        >
+          <Settings size={14} />
+          Kelola Opsi Form (Brand, Aroma, Gender, dll)
+        </Link>
+      </div>
+
       {/* Filter tabs */}
       <div className="mt-6 space-y-3">
         {/* Transaksi */}
@@ -306,9 +402,9 @@ export function AdminDashboardClient({
               <button
                 key={f.value}
                 onClick={() => setFilter(f.value)}
-                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${filter === f.value
-                    ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
-                    : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
+                className={`ml-1 mt-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${filter === f.value
+                  ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
+                  : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
                   }`}
               >
                 {f.label}
@@ -335,9 +431,9 @@ export function AdminDashboardClient({
               <button
                 key={f.value}
                 onClick={() => setFilter(f.value)}
-                className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${filter === f.value
-                    ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
-                    : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
+                className={`ml-1 mt-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${filter === f.value
+                  ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
+                  : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
                   }`}
               >
                 {f.label}
@@ -369,12 +465,11 @@ export function AdminDashboardClient({
                       <p className="text-sm font-medium text-gold-100">{w.user?.name || "Seller"}</p>
                       <p className="text-xs text-gold-200/40">{w.user?.email}</p>
                     </div>
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${
-                      w.status === "pending" ? "bg-yellow-500/15 text-yellow-400 ring-yellow-500/30" :
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${w.status === "pending" ? "bg-yellow-500/15 text-yellow-400 ring-yellow-500/30" :
                       w.status === "approved" ? "bg-blue-500/15 text-blue-400 ring-blue-500/30" :
-                      w.status === "completed" ? "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30" :
-                      "bg-red-500/15 text-red-400 ring-red-500/30"
-                    }`}>
+                        w.status === "completed" ? "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30" :
+                          "bg-red-500/15 text-red-400 ring-red-500/30"
+                      }`}>
                       {w.status === "pending" ? "Menunggu" : w.status === "approved" ? "Disetujui" : w.status === "completed" ? "Selesai" : "Ditolak"}
                     </span>
                   </div>
@@ -483,8 +578,8 @@ export function AdminDashboardClient({
             {filter === "needs_verification"
               ? "Tidak ada pembayaran yang perlu diverifikasi."
               : filter === "pending_payment"
-              ? "Tidak ada pesanan yang menunggu pembayaran."
-              : "Tidak ada pesanan."}
+                ? "Tidak ada pesanan yang menunggu pembayaran."
+                : "Tidak ada pesanan."}
           </p>
         </div>
       ) : filter !== "withdrawals" && (
@@ -585,6 +680,18 @@ export function AdminDashboardClient({
                             <span className="text-gold-200/60">{formatDate(order.payment_deadline)}</span>
                           </div>
                         )}
+                        {order.shipping_courier && (
+                          <div className="flex justify-between">
+                            <span className="text-gold-200/40">Ekspedisi</span>
+                            <span className="text-gold-200/60 uppercase">{order.shipping_courier}{order.shipping_service ? ` — ${order.shipping_service}` : ""}</span>
+                          </div>
+                        )}
+                        {order.shipping_cost > 0 && (
+                          <div className="flex justify-between">
+                            <span className="text-gold-200/40">Ongkir</span>
+                            <span className="font-medium text-gold-200/60">{formatRupiah(order.shipping_cost)}</span>
+                          </div>
+                        )}
                         {order.shipping_receipt && (
                           <div className="flex justify-between">
                             <span className="text-gold-200/40">Resi</span>
@@ -596,31 +703,97 @@ export function AdminDashboardClient({
 
                     {/* Admin actions for paid orders */}
                     {order.status === "paid" && (
-                      <div className="mt-4 flex gap-3">
-                        <button
-                          onClick={() => handleVerify(order.id)}
-                          disabled={!!actionLoading}
-                          className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-3 text-sm font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/25 disabled:opacity-50"
-                        >
-                          {actionLoading === order.id + "confirm" ? (
-                            <Loader2 size={16} className="animate-spin" />
-                          ) : (
-                            <CheckCircle2 size={16} />
-                          )}
-                          Verifikasi Pembayaran
-                        </button>
-                        <button
-                          onClick={() => handleReject(order.id)}
-                          disabled={!!actionLoading}
-                          className="flex items-center justify-center gap-2 rounded-xl border border-red-500/30 px-6 py-3 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
-                        >
-                          {actionLoading === order.id + "reject" ? (
-                            <Loader2 size={14} className="animate-spin" />
-                          ) : (
+                      <div className="mt-4 space-y-3">
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleVerify(order.id)}
+                            disabled={!!actionLoading}
+                            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-emerald-500/15 py-3 text-sm font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/25 disabled:opacity-50"
+                          >
+                            {actionLoading === order.id + "confirm" ? (
+                              <Loader2 size={16} className="animate-spin" />
+                            ) : (
+                              <CheckCircle2 size={16} />
+                            )}
+                            Verifikasi Pembayaran
+                          </button>
+                          <button
+                            onClick={() => {
+                              setRejectingOrderId(rejectingOrderId === order.id ? null : order.id);
+                              setOrderRejectReason("");
+                              setOrderRejectCustom("");
+                            }}
+                            disabled={!!actionLoading}
+                            className="flex items-center justify-center gap-2 rounded-xl border border-red-500/30 px-6 py-3 text-sm font-medium text-red-400 transition-colors hover:bg-red-500/10 disabled:opacity-50"
+                          >
                             <XCircle size={14} />
-                          )}
-                          Tolak
-                        </button>
+                            Tolak
+                          </button>
+                        </div>
+
+                        {/* Rejection reason modal */}
+                        {rejectingOrderId === order.id && (
+                          <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-4 space-y-3">
+                            <p className="text-xs font-semibold text-red-400">Alasan Penolakan</p>
+                            <select
+                              value={orderRejectReason}
+                              onChange={(e) => {
+                                setOrderRejectReason(e.target.value);
+                                if (e.target.value !== "other") setOrderRejectCustom("");
+                              }}
+                              className="input-dark w-full text-sm"
+                            >
+                              <option value="">— Pilih alasan —</option>
+                              <option value="Bukti transfer tidak valid / palsu">Bukti transfer tidak valid / palsu</option>
+                              <option value="Nominal transfer tidak sesuai">Nominal transfer tidak sesuai</option>
+                              <option value="Transfer ke rekening yang salah">Transfer ke rekening yang salah</option>
+                              <option value="Bukti transfer buram / tidak terbaca">Bukti transfer buram / tidak terbaca</option>
+                              <option value="Nama pengirim tidak sesuai">Nama pengirim tidak sesuai</option>
+                              <option value="Pembayaran sudah kadaluarsa">Pembayaran sudah kadaluarsa</option>
+                              <option value="other">Lainnya (tulis sendiri)</option>
+                            </select>
+                            {orderRejectReason === "other" && (
+                              <input
+                                type="text"
+                                value={orderRejectCustom}
+                                onChange={(e) => setOrderRejectCustom(e.target.value)}
+                                placeholder="Tulis alasan penolakan..."
+                                className="input-dark w-full text-sm"
+                              />
+                            )}
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  const reason = orderRejectReason === "other" ? orderRejectCustom : orderRejectReason;
+                                  handleReject(order.id, reason);
+                                }}
+                                disabled={
+                                  !!actionLoading ||
+                                  !orderRejectReason ||
+                                  (orderRejectReason === "other" && !orderRejectCustom.trim())
+                                }
+                                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-500/15 py-2.5 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/25 disabled:opacity-50"
+                              >
+                                {actionLoading === order.id + "reject" ? (
+                                  <Loader2 size={14} className="animate-spin" />
+                                ) : (
+                                  <XCircle size={14} />
+                                )}
+                                Konfirmasi Tolak
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setRejectingOrderId(null);
+                                  setOrderRejectReason("");
+                                  setOrderRejectCustom("");
+                                }}
+                                className="rounded-xl border border-gold-900/30 px-4 py-2.5 text-sm text-gold-200/50 transition-colors hover:bg-surface-300"
+                              >
+                                Batal
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -650,6 +823,8 @@ export function AdminDashboardClient({
           })}
         </div>
       )}
+
+      <AdminModal modal={modal} onClose={closeModal} />
     </div>
   );
 }

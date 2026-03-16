@@ -309,7 +309,7 @@ export function OrderDetailClient({
       <div className="my-6 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
 
       {/* ── Timeline ── */}
-      {order.status !== "cancelled" && (
+      {order.status !== "cancelled" && order.status !== "rejected" && (
         <div className="mb-6 rounded-2xl border border-gold-900/20 bg-surface-200/50 p-5">
           <p className="mb-4 text-xs font-semibold uppercase tracking-[0.15em] text-gold-200/30">
             Status Pesanan
@@ -733,12 +733,33 @@ export function OrderDetailClient({
         </div>
       )}
 
-      {/* CANCELLED */}
+      {/* REJECTED (by admin) */}
+      {order.status === "rejected" && (
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
+            <XCircle size={20} className="mt-0.5 flex-shrink-0 text-rose-400" />
+            <div>
+              <p className="text-sm font-semibold text-rose-300">Pembayaran Ditolak</p>
+              <p className="mt-0.5 text-xs text-gold-200/40">
+                Pembayaran kamu ditolak oleh admin. Silakan periksa alasan di bawah ini.
+              </p>
+            </div>
+          </div>
+          {order.reject_reason && (
+            <div className="rounded-xl border border-rose-500/15 bg-rose-500/5 p-4">
+              <p className="text-xs font-semibold text-rose-400/70 mb-1">Alasan Penolakan</p>
+              <p className="text-sm text-rose-300">{order.reject_reason}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* CANCELLED (by buyer/seller/expired) */}
       {order.status === "cancelled" && (
         <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
           <XCircle size={20} className="mt-0.5 flex-shrink-0 text-red-400" />
           <div>
-            <p className="text-sm font-semibold text-red-300">Pesanan dibatalkan</p>
+            <p className="text-sm font-semibold text-red-300">Pesanan Dibatalkan</p>
             <p className="mt-0.5 text-xs text-gold-200/40">
               Order ini dibatalkan karena tidak melakukan pembayaran dalam batas waktu yang ditentukan.
             </p>

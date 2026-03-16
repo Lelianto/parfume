@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { formatRupiah } from "@/lib/utils";
 
-type StatusFilter = "all" | "active" | "pending_payment" | "paid" | "confirmed" | "decanting" | "shipped" | "completed" | "cancelled";
+type StatusFilter = "all" | "active" | "pending_payment" | "paid" | "confirmed" | "decanting" | "shipped" | "completed" | "cancelled" | "rejected";
 
 const FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "Semua" },
@@ -24,6 +24,7 @@ const FILTER_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: "shipped", label: "Dikirim" },
   { value: "completed", label: "Selesai" },
   { value: "cancelled", label: "Dibatalkan" },
+  { value: "rejected", label: "Ditolak" },
 ];
 
 export function SellerOrdersClient({ orders }: { orders: SellerOrder[] }) {
@@ -31,13 +32,13 @@ export function SellerOrdersClient({ orders }: { orders: SellerOrder[] }) {
 
   const filtered = orders.filter((o) => {
     if (filter === "all") return true;
-    if (filter === "active") return !["cancelled", "completed"].includes(o.status);
+    if (filter === "active") return !["cancelled", "completed", "rejected"].includes(o.status);
     return o.status === filter;
   });
 
   const counts = {
     all: orders.length,
-    active: orders.filter((o) => !["cancelled", "completed"].includes(o.status)).length,
+    active: orders.filter((o) => !["cancelled", "completed", "rejected"].includes(o.status)).length,
     pending_payment: orders.filter((o) => o.status === "pending_payment").length,
     paid: orders.filter((o) => o.status === "paid").length,
     confirmed: orders.filter((o) => o.status === "confirmed").length,
@@ -45,6 +46,7 @@ export function SellerOrdersClient({ orders }: { orders: SellerOrder[] }) {
     shipped: orders.filter((o) => o.status === "shipped").length,
     completed: orders.filter((o) => o.status === "completed").length,
     cancelled: orders.filter((o) => o.status === "cancelled").length,
+    rejected: orders.filter((o) => o.status === "rejected").length,
   };
 
   return (
@@ -66,11 +68,10 @@ export function SellerOrdersClient({ orders }: { orders: SellerOrder[] }) {
             <button
               key={opt.value}
               onClick={() => setFilter(opt.value)}
-              className={`whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                filter === opt.value
+              className={`ml-1 mt-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${filter === opt.value
                   ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
                   : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
-              }`}
+                }`}
             >
               {opt.label}
               {count > 0 && (

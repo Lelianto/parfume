@@ -7,6 +7,7 @@ import { ArrowLeft, Upload, Loader2, Video, Plus, Trash2, X, Check } from "lucid
 import Link from "next/link";
 import Image from "next/image";
 import { TagInput } from "@/components/TagInput";
+import { ComboBox } from "@/components/ComboBox";
 import type { Concentration, Split } from "@/types/database";
 
 interface VariantRow {
@@ -36,12 +37,18 @@ export default function EditSplitPage() {
   const [step, setStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set([1, 2, 3, 4]));
 
+  // Form options from DB
+  const [formOptions, setFormOptions] = useState<Record<string, string[]>>({});
+
   // Perfume fields
   const [brand, setBrand] = useState("");
   const [perfumeName, setPerfumeName] = useState("");
   const [perfumeVariant, setPerfumeVariant] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [concentration, setConcentration] = useState<Concentration | "">("");
+  const [brandType, setBrandType] = useState("");
+  const [gender, setGender] = useState("");
+  const [scentClassification, setScentClassification] = useState("");
 
   // Fragrance notes
   const [topNotes, setTopNotes] = useState<string[]>([]);
@@ -80,6 +87,14 @@ export default function EditSplitPage() {
   const totalAllocatedMl = variants.reduce((sum, v) => sum + (Number(v.size_ml) || 0) * (Number(v.stock) || 0), 0);
   const bottleMl = Number(bottleSize) || 0;
   const isOverCapacity = bottleMl > 0 && totalAllocatedMl > bottleMl;
+
+  // Fetch form options
+  useEffect(() => {
+    fetch("/api/admin/form-options")
+      .then((r) => r.json())
+      .then((data) => { if (!data.error) setFormOptions(data); })
+      .catch(() => {});
+  }, []);
 
   // Load existing split data
   useEffect(() => {
@@ -133,6 +148,9 @@ export default function EditSplitPage() {
       setMiddleNotes(s.perfume?.middle_notes ?? []);
       setBaseNotes(s.perfume?.base_notes ?? []);
       setScentFamily(s.perfume?.scent_family ?? "");
+      setBrandType(s.perfume?.brand_type ?? "");
+      setGender(s.perfume?.gender ?? "");
+      setScentClassification(s.perfume?.scent_classification ?? "");
 
       // Existing images
       setExistingBottlePhoto(s.bottle_photo_url ?? "");
@@ -382,6 +400,9 @@ export default function EditSplitPage() {
           perfumeVariant: perfumeVariant.length > 0 ? perfumeVariant.join(", ") : null,
           description,
           concentration,
+          brandType,
+          gender,
+          scentClassification,
           bottleSize: Number(bottleSize),
           batchCode,
           isReadyStock,
@@ -493,12 +514,12 @@ export default function EditSplitPage() {
               <div className="mt-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Brand *</label>
-                  <input
-                    type="text"
+                  <ComboBox
                     value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    placeholder="contoh: Dior, Tom Ford, Chanel"
-                    className="input-dark mt-1"
+                    onChange={setBrand}
+                    options={formOptions.brand ?? []}
+                    placeholder="Cari atau ketik brand..."
+                    className="mt-1"
                   />
                 </div>
                 <div>
@@ -541,6 +562,38 @@ export default function EditSplitPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gold-200/60">Tipe Brand</label>
+                    <ComboBox
+                      value={brandType}
+                      onChange={setBrandType}
+                      options={formOptions.brand_type ?? []}
+                      placeholder="Designer, Niche, dll"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gold-200/60">Gender</label>
+                    <ComboBox
+                      value={gender}
+                      onChange={setGender}
+                      options={formOptions.gender ?? []}
+                      placeholder="Men, Women, Unisex"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Klasifikasi Aroma</label>
+                  <ComboBox
+                    value={scentClassification}
+                    onChange={setScentClassification}
+                    options={formOptions.scent_classification ?? []}
+                    placeholder="Cari klasifikasi aroma..."
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Deskripsi</label>

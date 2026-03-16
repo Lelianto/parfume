@@ -1,5 +1,5 @@
 export type SplitStatus = "open" | "full" | "decanting" | "shipped" | "completed";
-export type OrderStatus = "pending_payment" | "paid" | "pending" | "confirmed" | "decanting" | "shipped" | "completed" | "cancelled";
+export type OrderStatus = "pending_payment" | "paid" | "pending" | "confirmed" | "decanting" | "shipped" | "completed" | "cancelled" | "rejected";
 export type Concentration = "EDP" | "EDT" | "Parfum" | "EDC" | "Cologne";
 export type ScentFamily = "Woody" | "Floral" | "Oriental" | "Fresh" | "Citrus" | "Aquatic" | "Gourmand" | "Aromatic" | "Chypre" | "Fougere";
 
@@ -55,6 +55,9 @@ export interface Perfume {
   middle_notes: string[];
   base_notes: string[];
   scent_family: string | null;
+  brand_type: string | null;
+  gender: string | null;
+  scent_classification: string | null;
   created_at: string;
 }
 
@@ -138,6 +141,7 @@ export interface Order {
   confirmed_at: string | null;
   shipped_at: string | null;
   completed_at: string | null;
+  reject_reason: string | null;
   // escrow
   disbursement_status: string | null;
   disbursed_at: string | null;

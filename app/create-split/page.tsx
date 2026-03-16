@@ -7,6 +7,7 @@ import { ArrowLeft, Upload, Loader2, Video, Plus, Trash2, X, Check } from "lucid
 import Link from "next/link";
 import Image from "next/image";
 import { TagInput } from "@/components/TagInput";
+import { ComboBox } from "@/components/ComboBox";
 import type { Concentration } from "@/types/database";
 
 interface VariantRow {
@@ -22,6 +23,9 @@ interface SplitDraft {
   perfumeVariant: string[];
   description: string;
   concentration: string;
+  brandType: string;
+  gender: string;
+  scentClassification: string;
   bottleSize: string;
   batchCode: string;
   isReadyStock: boolean;
@@ -55,12 +59,18 @@ export default function CreateSplitPage() {
   const [showDraftBanner, setShowDraftBanner] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState("");
 
+  // Form options from DB
+  const [formOptions, setFormOptions] = useState<Record<string, string[]>>({});
+
   // Perfume fields
   const [brand, setBrand] = useState("");
   const [perfumeName, setPerfumeName] = useState("");
   const [perfumeVariant, setPerfumeVariant] = useState<string[]>([]);
   const [description, setDescription] = useState("");
   const [concentration, setConcentration] = useState<Concentration | "">("");
+  const [brandType, setBrandType] = useState("");
+  const [gender, setGender] = useState("");
+  const [scentClassification, setScentClassification] = useState("");
 
   // Fragrance notes
   const [topNotes, setTopNotes] = useState<string[]>([]);
@@ -106,6 +116,9 @@ export default function CreateSplitPage() {
       perfumeVariant,
       description,
       concentration,
+      brandType,
+      gender,
+      scentClassification,
       bottleSize,
       batchCode,
       isReadyStock,
@@ -119,7 +132,7 @@ export default function CreateSplitPage() {
       savedAt: new Date().toISOString(),
     };
     localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-  }, [step, brand, perfumeName, perfumeVariant, description, concentration, bottleSize, batchCode, isReadyStock, variants, topNotes, middleNotes, baseNotes, scentFamily, bottlePhoto, batchCodePhoto]);
+  }, [step, brand, perfumeName, perfumeVariant, description, concentration, brandType, gender, scentClassification, bottleSize, batchCode, isReadyStock, variants, topNotes, middleNotes, baseNotes, scentFamily, bottlePhoto, batchCodePhoto]);
 
   function restoreDraft(draft: SplitDraft) {
     setStep(draft.step);
@@ -128,6 +141,9 @@ export default function CreateSplitPage() {
     setPerfumeVariant(Array.isArray(draft.perfumeVariant) ? draft.perfumeVariant : draft.perfumeVariant ? [draft.perfumeVariant] : []);
     setDescription(draft.description);
     setConcentration(draft.concentration as Concentration | "");
+    setBrandType(draft.brandType ?? "");
+    setGender(draft.gender ?? "");
+    setScentClassification(draft.scentClassification ?? "");
     setBottleSize(draft.bottleSize);
     setBatchCode(draft.batchCode);
     setIsReadyStock(draft.isReadyStock);
@@ -154,6 +170,14 @@ export default function CreateSplitPage() {
     localStorage.removeItem(DRAFT_KEY);
     setShowDraftBanner(false);
   }
+
+  // Fetch form options on mount
+  useEffect(() => {
+    fetch("/api/admin/form-options")
+      .then((r) => r.json())
+      .then((data) => { if (!data.error) setFormOptions(data); })
+      .catch(() => {});
+  }, []);
 
   // Check for saved draft on mount
   useEffect(() => {
@@ -415,6 +439,9 @@ export default function CreateSplitPage() {
           variant: perfumeVariant.length > 0 ? perfumeVariant.join(", ") : null,
           description: description || null,
           concentration: concentration || null,
+          brand_type: brandType || null,
+          gender: gender || null,
+          scent_classification: scentClassification || null,
           top_notes: finalTopNotes,
           middle_notes: finalMiddleNotes,
           base_notes: finalBaseNotes,
@@ -596,12 +623,12 @@ export default function CreateSplitPage() {
               <div className="mt-4 space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Brand *</label>
-                  <input
-                    type="text"
+                  <ComboBox
                     value={brand}
-                    onChange={(e) => setBrand(e.target.value)}
-                    placeholder="contoh: Dior, Tom Ford, Chanel"
-                    className="input-dark mt-1"
+                    onChange={setBrand}
+                    options={formOptions.brand ?? []}
+                    placeholder="Cari atau ketik brand..."
+                    className="mt-1"
                   />
                 </div>
                 <div>
@@ -644,6 +671,38 @@ export default function CreateSplitPage() {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gold-200/60">Tipe Brand</label>
+                    <ComboBox
+                      value={brandType}
+                      onChange={setBrandType}
+                      options={formOptions.brand_type ?? []}
+                      placeholder="Designer, Niche, dll"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gold-200/60">Gender</label>
+                    <ComboBox
+                      value={gender}
+                      onChange={setGender}
+                      options={formOptions.gender ?? []}
+                      placeholder="Men, Women, Unisex"
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Klasifikasi Aroma</label>
+                  <ComboBox
+                    value={scentClassification}
+                    onChange={setScentClassification}
+                    options={formOptions.scent_classification ?? []}
+                    placeholder="Cari klasifikasi aroma..."
+                    className="mt-1"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Deskripsi</label>

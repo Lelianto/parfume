@@ -205,7 +205,7 @@ export function SellerBalanceClient({
             <div>
               <label className="block text-xs text-gold-200/40 mb-1.5">Jumlah Penarikan</label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gold-200/40">Rp</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gold-200/40 pointer-events-none">Rp</span>
                 <input
                   type="number"
                   value={amount}
@@ -213,7 +213,7 @@ export function SellerBalanceClient({
                   placeholder="0"
                   min="1"
                   max={balance.balance}
-                  className="input-dark w-full pl-10"
+                  className="input-dark w-full pl-12"
                 />
               </div>
               <div className="mt-1.5 flex items-center justify-between">

@@ -27,7 +27,7 @@ export async function POST(
   }
 
   const body = await request.json();
-  const { action } = body; // "confirm" or "reject"
+  const { action, reason } = body; // "confirm" or "reject"
 
   if (!action || !["confirm", "reject"].includes(action)) {
     return NextResponse.json({ error: "Action harus 'confirm' atau 'reject'" }, { status: 400 });
@@ -71,7 +71,8 @@ export async function POST(
     const { error: updateError } = await supabase
       .from("orders")
       .update({
-        status: "cancelled",
+        status: "rejected",
+        reject_reason: reason || null,
       })
       .eq("id", orderId);
 
@@ -79,7 +80,7 @@ export async function POST(
       return NextResponse.json({ error: "Gagal menolak: " + updateError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, status: "cancelled" });
+    return NextResponse.json({ success: true, status: "rejected" });
   }
 
   return NextResponse.json({ error: "Invalid action" }, { status: 400 });

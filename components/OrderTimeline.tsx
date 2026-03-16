@@ -50,7 +50,7 @@ function getStepIndex(status: OrderStatus): number {
 }
 
 export function OrderTimeline({ status }: { status: OrderStatus }) {
-  if (status === "cancelled") return null;
+  if (status === "cancelled" || status === "rejected") return null;
 
   const currentIndex = getStepIndex(status);
 
@@ -65,13 +65,12 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
             {/* Icon column */}
             <div className="flex flex-col items-center">
               <div
-                className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border transition-all ${
-                  isDone
+                className={`mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border transition-all ${isDone
                     ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-400"
                     : isActive
-                    ? "border-gold-500/60 bg-gold-400/15 text-gold-400"
-                    : "border-gold-900/20 bg-surface-300/50 text-gold-800/30"
-                }`}
+                      ? "border-gold-500/60 bg-gold-400/15 text-gold-400"
+                      : "border-gold-900/20 bg-surface-300/50 text-gold-800/30"
+                  }`}
               >
                 {isDone ? (
                   <Check size={14} strokeWidth={2.5} />
@@ -84,9 +83,8 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
               {/* Connector line */}
               {i < STEPS.length - 1 && (
                 <div
-                  className={`mt-1 w-px flex-1 ${
-                    isDone ? "bg-emerald-500/25" : "bg-gold-900/15"
-                  }`}
+                  className={`mt-1 w-px flex-1 ${isDone ? "bg-emerald-500/25" : "bg-gold-900/15"
+                    }`}
                   style={{ minHeight: "28px" }}
                 />
               )}
@@ -95,13 +93,12 @@ export function OrderTimeline({ status }: { status: OrderStatus }) {
             {/* Content */}
             <div className={`pb-6 ${i === STEPS.length - 1 ? "pb-0" : ""}`}>
               <p
-                className={`text-sm font-medium ${
-                  isDone
+                className={`text-sm font-medium ${isDone
                     ? "text-gold-200/50"
                     : isActive
-                    ? "text-gold-100"
-                    : "text-gold-200/25"
-                }`}
+                      ? "text-gold-100"
+                      : "text-gold-200/25"
+                  }`}
               >
                 {step.label}
               </p>

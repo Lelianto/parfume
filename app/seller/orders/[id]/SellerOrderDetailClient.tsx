@@ -18,9 +18,6 @@ import {
   Loader2,
   User as UserIcon,
   MapPin,
-  Phone,
-  Mail,
-  Eye,
   XCircle,
   Banknote,
 } from "lucide-react";
@@ -111,7 +108,7 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
 
   // Determine current step index
   const statusOrder = steps.map((s) => s.status);
-  const currentIdx = order.status === "cancelled"
+  const currentIdx = (order.status === "cancelled" || order.status === "rejected")
     ? -1
     : statusOrder.indexOf(order.status as typeof statusOrder[number]);
 
@@ -160,7 +157,7 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
       <div className="my-6 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
 
       {/* Order Timeline */}
-      {order.status !== "cancelled" && (
+      {order.status !== "cancelled" && order.status !== "rejected" && (
         <div className="mb-8">
           <h2 className="mb-4 text-sm font-semibold text-gold-200/60">Status Pesanan</h2>
           <div className="flex items-center overflow-x-auto pb-2">
@@ -172,33 +169,40 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
                 <div key={s.status} className={`flex items-center ${i < steps.length - 1 ? "flex-1" : ""}`}>
                   <div className="flex flex-col items-center">
                     <div
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all sm:h-8 sm:w-8 ${
-                        isCurrent
+                      className={`mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full transition-all sm:h-8 sm:w-8 ${isCurrent
                           ? "bg-gold-400 text-surface-400 shadow-lg shadow-gold-400/20"
                           : isDone
-                          ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30"
-                          : "bg-surface-300 text-gold-200/20 ring-1 ring-gold-900/20"
-                      }`}
+                            ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30"
+                            : "bg-surface-300 text-gold-200/20 ring-1 ring-gold-900/20"
+                        }`}
                     >
                       <Icon size={12} className="sm:hidden" />
                       <Icon size={14} className="hidden sm:block" />
                     </div>
-                    <p className={`mt-1.5 whitespace-nowrap text-[9px] font-medium sm:text-[10px] ${
-                      isCurrent ? "text-gold-400" : isDone ? "text-emerald-400/60" : "text-gold-200/20"
-                    }`}>
+                    <p className={`mt-1.5 whitespace-nowrap text-[9px] font-medium sm:text-[10px] ${isCurrent ? "text-gold-400" : isDone ? "text-emerald-400/60" : "text-gold-200/20"
+                      }`}>
                       {s.label}
                     </p>
                   </div>
                   {i < steps.length - 1 && (
                     <div
-                      className={`mx-1 mb-5 h-px min-w-[16px] flex-1 sm:mx-1.5 ${
-                        i < currentIdx ? "bg-emerald-500/30" : "bg-gold-900/15"
-                      }`}
+                      className={`mx-1 mb-5 h-px min-w-[16px] flex-1 sm:mx-1.5 ${i < currentIdx ? "bg-emerald-500/30" : "bg-gold-900/15"
+                        }`}
                     />
                   )}
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {order.status === "rejected" && (
+        <div className="mb-6 flex items-center gap-3 rounded-xl border border-rose-500/20 bg-rose-500/5 p-4">
+          <XCircle size={20} className="flex-shrink-0 text-rose-400" />
+          <div>
+            <p className="text-sm font-medium text-rose-400">Pembayaran Ditolak</p>
+            <p className="text-xs text-gold-200/40">Pembayaran ditolak oleh admin.{order.reject_reason ? ` Alasan: ${order.reject_reason}` : ""}</p>
           </div>
         </div>
       )}
@@ -213,7 +217,7 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
         </div>
       )}
 
-      {/* Buyer Info */}
+      {/* Buyer Info — only name shown */}
       <div className="rounded-2xl border border-gold-900/20 bg-surface-200/60 p-5">
         <h2 className="mb-3 text-sm font-semibold text-gold-200/60">Info Pembeli</h2>
         <div className="flex items-center gap-3">
@@ -238,23 +242,6 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
               </p>
             )}
           </div>
-        </div>
-        <div className="mt-3 space-y-1.5">
-          {buyer?.email && (
-            <p className="flex items-center gap-2 text-xs text-gold-200/50">
-              <Mail size={12} /> {buyer.email}
-            </p>
-          )}
-          {buyer?.whatsapp && (
-            <a
-              href={`https://wa.me/${buyer.whatsapp.replace(/\D/g, "")}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-xs text-emerald-400 hover:underline"
-            >
-              <Phone size={12} /> {buyer.whatsapp}
-            </a>
-          )}
         </div>
       </div>
 
@@ -313,23 +300,16 @@ export function SellerOrderDetailClient({ order: initialOrder }: SellerOrderDeta
         </div>
       </div>
 
-      {/* Payment Proof */}
-      {order.payment_proof_url && (
-        <div className="mt-6">
-          <h2 className="mb-2 text-sm font-semibold text-gold-200/60">Bukti Pembayaran</h2>
-          <a
-            href={order.payment_proof_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group relative inline-block"
-          >
-            <div className="relative aspect-[3/4] w-[180px] overflow-hidden rounded-xl border border-gold-900/15 transition-all group-hover:border-gold-700/30">
-              <Image src={order.payment_proof_url} alt="Bukti Bayar" fill className="object-cover" />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/30">
-                <Eye size={24} className="text-white opacity-0 transition-opacity group-hover:opacity-100" />
-              </div>
-            </div>
-          </a>
+      {/* Payment confirmation info (payment proof hidden from seller) */}
+      {order.payment_proof_url && ["confirmed", "decanting", "shipped", "completed"].includes(order.status) && (
+        <div className="mt-6 flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+          <CheckCircle2 size={20} className="flex-shrink-0 text-emerald-400" />
+          <div>
+            <p className="text-sm font-medium text-emerald-400">Pembayaran telah dikonfirmasi</p>
+            <p className="text-xs text-gold-200/40">
+              Pembayaran untuk pesanan ini sudah diverifikasi oleh pihak Wangiverse.
+            </p>
+          </div>
         </div>
       )}
 
