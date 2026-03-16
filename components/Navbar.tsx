@@ -12,14 +12,12 @@ import {
   Package,
   PlusCircle,
   Store,
-  ClipboardList,
   Compass,
   LogIn,
   Droplets,
   ArrowLeft,
   UserCircle,
   Bookmark,
-  Wallet,
 } from "lucide-react";
 
 export function Navbar() {
@@ -64,9 +62,7 @@ export function Navbar() {
         { href: "/", label: "Jelajahi", icon: Compass },
         { href: "/create-split", label: "Buat Split", icon: PlusCircle },
         { href: "/wishlist", label: "Wishlist", icon: Bookmark },
-        { href: "/my-orders", label: "Pesanan Saya", icon: Package },
-        { href: "/seller/orders", label: "Kelola Pesanan", icon: ClipboardList },
-        { href: "/seller/balance", label: "Saldo", icon: Wallet },
+        { href: "/orders", label: "Pesanan", icon: Package },
         { href: `/seller/${user.id}`, label: "Toko Saya", icon: Store },
         { href: "/profile", label: "Profil", icon: UserCircle },
       ]
@@ -99,22 +95,10 @@ export function Navbar() {
                   Buat Split
                 </Link>
                 <Link
-                  href="/my-orders"
+                  href="/orders"
                   className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
                 >
-                  Pesanan Saya
-                </Link>
-                <Link
-                  href="/seller/orders"
-                  className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
-                >
-                  Kelola Pesanan
-                </Link>
-                <Link
-                  href="/seller/balance"
-                  className="text-sm font-medium text-gold-200/70 transition-colors hover:text-gold-400"
-                >
-                  Saldo
+                  Pesanan
                 </Link>
                 <Link
                   href={`/seller/${user.id}`}

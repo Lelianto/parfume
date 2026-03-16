@@ -490,7 +490,7 @@ export default function EditSplitPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-8 pt-20 md:pt-8">
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-20 sm:px-6 md:pt-8">
       <Link
         href={`/split/${splitId}`}
         className="mb-6 hidden items-center gap-1.5 text-sm text-gold-200/50 transition-colors hover:text-gold-400 md:inline-flex"

@@ -1,10 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Image from "next/image";
+import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-import type { User } from "@/types/database";
+import type { User, SellerBalance, Withdrawal, WithdrawalStatus } from "@/types/database";
+import { formatRupiah } from "@/lib/utils";
 import {
   User as UserIcon,
   MapPin,
@@ -14,23 +16,126 @@ import {
   Phone,
   Mail,
   ChevronDown,
-  ChevronUp,
   Store,
   CreditCard,
+  Wallet,
+  TrendingUp,
+  ArrowDownToLine,
+  Clock,
+  AlertTriangle,
+  Banknote,
 } from "lucide-react";
+
+type ProfileTab = "profile" | "balance";
 
 interface AddressOption {
   id: string;
   name: string;
 }
 
-export function ProfileClient({ profile: initialProfile }: { profile: User }) {
+function formatDate(dateStr: string): string {
+  return new Date(dateStr).toLocaleDateString("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function WithdrawalStatusBadge({ status }: { status: WithdrawalStatus }) {
+  const config: Record<WithdrawalStatus, { label: string; color: string }> = {
+    pending: { label: "Menunggu", color: "bg-yellow-500/15 text-yellow-400 ring-yellow-500/30" },
+    approved: { label: "Disetujui", color: "bg-blue-500/15 text-blue-400 ring-blue-500/30" },
+    completed: { label: "Selesai", color: "bg-emerald-500/15 text-emerald-400 ring-emerald-500/30" },
+    rejected: { label: "Ditolak", color: "bg-red-500/15 text-red-400 ring-red-500/30" },
+  };
+  const c = config[status];
+  return (
+    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${c.color}`}>
+      {c.label}
+    </span>
+  );
+}
+
+export function ProfileClient({
+  profile: initialProfile,
+  balance,
+  withdrawals: initialWithdrawals,
+  hasSplits,
+}: {
+  profile: User;
+  balance: SellerBalance;
+  withdrawals: Withdrawal[];
+  hasSplits: boolean;
+}) {
   const [profile, setProfile] = useState(initialProfile);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [profileInfoOpen, setProfileInfoOpen] = useState(false);
+  const [storeOpen, setStoreOpen] = useState(false);
   const [addressOpen, setAddressOpen] = useState(false);
+  const [bankOpen, setBankOpen] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get("tab") === "balance" ? "balance" : "profile";
+  const [activeTab, setActiveTab] = useState<ProfileTab>(initialTab);
+
+  // Balance state
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawLoading, setWithdrawLoading] = useState(false);
+  const [withdrawError, setWithdrawError] = useState("");
+  const [withdrawSuccess, setWithdrawSuccess] = useState("");
+
+  const hasBankInfo = profile.bank_name && profile.bank_account_number && profile.bank_account_name;
+  const hasPendingWithdrawal = initialWithdrawals.some((w) => w.status === "pending" || w.status === "approved");
+
+  function handleTabChange(newTab: ProfileTab) {
+    setActiveTab(newTab);
+    router.replace(`/profile${newTab === "balance" ? "?tab=balance" : ""}`, { scroll: false });
+  }
+
+  async function handleWithdraw() {
+    setWithdrawError("");
+    setWithdrawSuccess("");
+    const numAmount = Number(withdrawAmount);
+
+    if (!numAmount || numAmount <= 0) {
+      setWithdrawError("Masukkan jumlah yang valid");
+      return;
+    }
+
+    if (numAmount > balance.balance) {
+      setWithdrawError("Jumlah melebihi saldo");
+      return;
+    }
+
+    setWithdrawLoading(true);
+    const res = await fetch("/api/seller/withdrawals", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: numAmount }),
+    });
+
+    if (!res.ok) {
+      let errMsg = "Gagal mengajukan penarikan";
+      try {
+        const data = await res.json();
+        errMsg = data.error || errMsg;
+      } catch {
+        errMsg = `Server error (${res.status})`;
+      }
+      setWithdrawError(errMsg);
+      setWithdrawLoading(false);
+      return;
+    }
+
+    setWithdrawSuccess("Penarikan berhasil diajukan! Admin akan memprosesnya.");
+    setWithdrawAmount("");
+    setWithdrawLoading(false);
+    router.refresh();
+  }
 
   // Profile fields
   const [name, setName] = useState(profile.name || "");
@@ -75,11 +180,6 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
   const [loadingAddress, setLoadingAddress] = useState(false);
 
   const hasAddress = !!(profile.address_name && profile.address_province);
-
-  // Auto-open address section if no address saved
-  useEffect(() => {
-    if (!hasAddress) setAddressOpen(true);
-  }, [hasAddress]);
 
   // Fetch provinces on mount
   useEffect(() => {
@@ -296,9 +396,221 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
     "w-full rounded-xl border border-gold-900/30 bg-surface-400 px-3 py-2.5 text-sm text-gold-100 outline-none transition-colors focus:border-gold-700/50 focus:ring-1 focus:ring-gold-700/30 disabled:opacity-40";
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-8 pt-20 md:pt-8">
+    <div className="mx-auto max-w-3xl px-4 pb-8 pt-20 sm:px-6 md:pt-8">
       <h1 className="font-display text-3xl font-bold text-gold-100">Profil Saya</h1>
       <p className="mt-1 text-sm text-gold-200/40">Kelola informasi profil dan alamat pengiriman</p>
+
+      {/* Tabs */}
+      {hasSplits && (
+        <div className="mt-6 flex gap-1 rounded-xl bg-surface-200/60 p-1">
+          <button
+            onClick={() => handleTabChange("profile")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+              activeTab === "profile"
+                ? "bg-gold-400/20 text-gold-400 shadow-sm"
+                : "text-gold-200/50 hover:text-gold-200/70"
+            }`}
+          >
+            <UserIcon size={16} />
+            Profil
+          </button>
+          <button
+            onClick={() => handleTabChange("balance")}
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+              activeTab === "balance"
+                ? "bg-gold-400/20 text-gold-400 shadow-sm"
+                : "text-gold-200/50 hover:text-gold-200/70"
+            }`}
+          >
+            <Wallet size={16} />
+            Saldo & Penarikan
+          </button>
+        </div>
+      )}
+
+      {/* Balance Tab */}
+      {activeTab === "balance" && hasSplits && (
+        <>
+          {/* Balance Cards */}
+          <div className="mt-6 grid gap-4 sm:grid-cols-3">
+            <div className="rounded-2xl border border-gold-900/20 bg-surface-200/60 p-5">
+              <div className="flex items-center gap-2 text-xs text-gold-200/40">
+                <Wallet size={14} /> Saldo Tersedia
+              </div>
+              <p className="mt-2 font-display text-2xl font-bold text-gold-400">
+                {formatRupiah(balance.balance)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gold-900/20 bg-surface-200/60 p-5">
+              <div className="flex items-center gap-2 text-xs text-gold-200/40">
+                <TrendingUp size={14} /> Total Pendapatan
+              </div>
+              <p className="mt-2 font-display text-2xl font-bold text-emerald-400">
+                {formatRupiah(balance.total_earned)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gold-900/20 bg-surface-200/60 p-5">
+              <div className="flex items-center gap-2 text-xs text-gold-200/40">
+                <ArrowDownToLine size={14} /> Total Ditarik
+              </div>
+              <p className="mt-2 font-display text-2xl font-bold text-gold-100">
+                {formatRupiah(balance.total_withdrawn)}
+              </p>
+            </div>
+          </div>
+
+          {/* Withdraw Form */}
+          <div className="mt-6 rounded-2xl border border-gold-900/20 bg-surface-200/60 p-5">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-gold-200/60">
+              <Banknote size={16} /> Tarik Dana
+            </h2>
+
+            {!hasBankInfo ? (
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-orange-500/20 bg-orange-500/5 p-4">
+                <AlertTriangle size={20} className="flex-shrink-0 text-orange-400" />
+                <div>
+                  <p className="text-sm font-medium text-orange-400">Rekening bank belum diisi</p>
+                  <p className="text-xs text-gold-200/40">
+                    Lengkapi info rekening bank di{" "}
+                    <button onClick={() => handleTabChange("profile")} className="text-gold-400 underline">tab Profil</button>
+                    {" "}untuk bisa menarik dana.
+                  </p>
+                </div>
+              </div>
+            ) : hasPendingWithdrawal ? (
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+                <Clock size={20} className="flex-shrink-0 text-blue-400" />
+                <div>
+                  <p className="text-sm font-medium text-blue-400">Penarikan sedang diproses</p>
+                  <p className="text-xs text-gold-200/40">
+                    Kamu masih memiliki penarikan yang sedang diproses. Tunggu hingga selesai untuk mengajukan penarikan baru.
+                  </p>
+                </div>
+              </div>
+            ) : balance.balance <= 0 ? (
+              <div className="mt-4 flex items-center gap-3 rounded-xl border border-gold-900/20 bg-surface-300/40 p-4">
+                <Wallet size={20} className="flex-shrink-0 text-gold-200/30" />
+                <div>
+                  <p className="text-sm font-medium text-gold-200/50">Saldo kosong</p>
+                  <p className="text-xs text-gold-200/40">
+                    Saldo akan bertambah otomatis saat pesanan selesai.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-4">
+                <div className="rounded-lg bg-surface-300/60 p-3 text-xs space-y-1.5">
+                  <div className="flex justify-between">
+                    <span className="text-gold-200/40">Bank</span>
+                    <span className="font-medium text-gold-100">{profile.bank_name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gold-200/40">No. Rekening</span>
+                    <span className="font-mono font-medium text-gold-100">{profile.bank_account_number}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gold-200/40">Atas Nama</span>
+                    <span className="font-medium text-gold-100">{profile.bank_account_name}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-gold-200/40 mb-1.5">Jumlah Penarikan</label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gold-200/40 pointer-events-none">Rp</span>
+                    <input
+                      type="number"
+                      value={withdrawAmount}
+                      onChange={(e) => setWithdrawAmount(e.target.value)}
+                      placeholder="0"
+                      min="1"
+                      max={balance.balance}
+                      className="input-dark w-full !pl-8"
+                    />
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between">
+                    <span className="text-[11px] text-gold-200/30">
+                      Maks: {formatRupiah(balance.balance)}
+                    </span>
+                    <button
+                      onClick={() => setWithdrawAmount(String(balance.balance))}
+                      className="text-[11px] font-medium text-gold-400 hover:underline"
+                    >
+                      Tarik Semua
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleWithdraw}
+                  disabled={withdrawLoading}
+                  className="btn-gold flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-surface-400"
+                >
+                  {withdrawLoading ? <Loader2 size={16} className="animate-spin" /> : <ArrowDownToLine size={16} />}
+                  Ajukan Penarikan
+                </button>
+              </div>
+            )}
+
+            {withdrawError && (
+              <div className="mt-3 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-xs text-red-400">
+                {withdrawError}
+              </div>
+            )}
+            {withdrawSuccess && (
+              <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs text-emerald-400">
+                {withdrawSuccess}
+              </div>
+            )}
+          </div>
+
+          {/* Withdrawal History */}
+          <div className="mt-6">
+            <h2 className="mb-4 text-sm font-semibold text-gold-200/60">Riwayat Penarikan</h2>
+            {initialWithdrawals.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gold-900/30 py-12 text-center">
+                <ArrowDownToLine size={36} className="mx-auto text-gold-800/30" />
+                <p className="mt-3 text-sm text-gold-200/40">Belum ada riwayat penarikan</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {initialWithdrawals.map((w) => (
+                  <div
+                    key={w.id}
+                    className="rounded-xl border border-gold-900/20 bg-surface-200/60 p-4"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-display text-lg font-bold text-gold-100">
+                          {formatRupiah(w.amount)}
+                        </p>
+                        <p className="mt-0.5 text-xs text-gold-200/40">
+                          {w.bank_name} • {w.bank_account_number}
+                        </p>
+                        <p className="text-xs text-gold-200/30">{formatDate(w.requested_at)}</p>
+                      </div>
+                      <WithdrawalStatusBadge status={w.status} />
+                    </div>
+                    {w.admin_note && (
+                      <div className="mt-2 rounded-lg bg-red-500/5 p-2 text-xs text-red-400">
+                        Catatan admin: {w.admin_note}
+                      </div>
+                    )}
+                    {w.completed_at && (
+                      <p className="mt-1 text-[11px] text-emerald-400/60">
+                        Ditransfer: {formatDate(w.completed_at)}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Profile Tab */}
+      {activeTab === "profile" && <>
 
       {/* Avatar & Email */}
       <div className="mt-8 flex items-center gap-4 rounded-2xl border border-gold-900/20 bg-surface-200/60 p-5">
@@ -323,153 +635,232 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
         </div>
       </div>
 
-      {/* Profile Info */}
-      <div className="mt-6">
-        <h2 className="text-sm font-semibold text-gold-200/60">Informasi Profil</h2>
-        <div className="mt-3 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gold-200/60">Nama</label>
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="input-dark mt-1"
-            />
+      <div className="mt-6 space-y-3">
+
+      {/* --- Informasi Profil --- */}
+      <div className="overflow-hidden rounded-2xl border border-gold-900/20 bg-surface-200/60">
+        <button
+          onClick={() => setProfileInfoOpen(!profileInfoOpen)}
+          className="flex w-full items-center justify-between p-5"
+        >
+          <div className="flex items-center gap-2">
+            <UserIcon size={16} className="text-gold-400" />
+            <h2 className="text-sm font-semibold text-gold-200/60">Informasi Profil</h2>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gold-200/60">Bio</label>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              placeholder="Tentang kamu..."
-              rows={2}
-              className="input-dark mt-1 resize-none"
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <label className="flex items-center gap-1.5 text-sm font-medium text-gold-200/60">
-                <Phone size={12} /> WhatsApp
-              </label>
-              <input
-                type="tel"
-                value={whatsapp}
-                onChange={(e) => setWhatsapp(e.target.value)}
-                placeholder="08xxxxxxxxxx"
-                className="input-dark mt-1"
-              />
-            </div>
-            <div>
-              <label className="flex items-center gap-1.5 text-sm font-medium text-gold-200/60">
-                <MapPin size={12} /> Kota
-              </label>
-              <input
-                type="text"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                placeholder="Kota domisili"
-                className="input-dark mt-1"
-              />
-            </div>
-          </div>
-        </div>
+          <motion.div animate={{ rotate: profileInfoOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown size={16} className="text-gold-200/40" />
+          </motion.div>
+        </button>
+
+        <AnimatePresence initial={false} mode="wait">
+          {!profileInfoOpen ? (
+            <motion.div
+              key="preview"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            >
+              <div className="border-t border-gold-900/10 px-5 py-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-gold-200/50">
+                  {name && <span>{name}</span>}
+                  {whatsapp && <span className="flex items-center gap-1"><Phone size={10} />{whatsapp}</span>}
+                  {city && <span className="flex items-center gap-1"><MapPin size={10} />{city}</span>}
+                  {!name && !whatsapp && !city && <span className="text-gold-200/30">Belum diisi</span>}
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="form"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            >
+              <div className="border-t border-gold-900/10 p-5 pt-4 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Nama</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="input-dark mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Bio</label>
+                  <textarea
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                    placeholder="Tentang kamu..."
+                    rows={2}
+                    className="input-dark mt-1 resize-none"
+                  />
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-gold-200/60">
+                      <Phone size={12} /> WhatsApp
+                    </label>
+                    <input
+                      type="tel"
+                      value={whatsapp}
+                      onChange={(e) => setWhatsapp(e.target.value)}
+                      placeholder="08xxxxxxxxxx"
+                      className="input-dark mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-gold-200/60">
+                      <MapPin size={12} /> Kota
+                    </label>
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="Kota domisili"
+                      className="input-dark mt-1"
+                    />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <div className="my-8 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
-
-      {/* Store Location */}
-      <div>
-        <div className="flex items-center gap-2">
-          <Store size={16} className="text-gold-400" />
-          <h2 className="text-sm font-semibold text-gold-200/60">Lokasi Toko</h2>
-        </div>
-        <p className="mt-1 text-xs text-gold-200/30">
-          Ditampilkan di halaman split agar pembeli bisa memperkirakan ongkir
-        </p>
-
-        {/* Preview if saved and not editing */}
-        {storeProvince && storeCity && (
-          <div className="mt-3 rounded-xl border border-gold-900/15 bg-surface-200/40 p-4">
-            <p className="flex items-center gap-1.5 text-sm text-gold-100">
-              <MapPin size={14} className="text-gold-400" />
-              {storeCity}, {storeProvince}
-            </p>
+      {/* --- Lokasi Toko --- */}
+      <div className="overflow-hidden rounded-2xl border border-gold-900/20 bg-surface-200/60">
+        <button
+          onClick={() => setStoreOpen(!storeOpen)}
+          className="flex w-full items-center justify-between p-5"
+        >
+          <div className="flex items-center gap-2">
+            <Store size={16} className="text-gold-400" />
+            <h2 className="text-sm font-semibold text-gold-200/60">Lokasi Toko</h2>
           </div>
-        )}
+          <motion.div animate={{ rotate: storeOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown size={16} className="text-gold-200/40" />
+          </motion.div>
+        </button>
 
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="block text-sm font-medium text-gold-200/60">Provinsi</label>
-            <select
-              value={storeProvinceId}
-              onChange={(e) => handleStoreProvinceChange(e.target.value)}
-              className={selectClass + " mt-1"}
+        <AnimatePresence initial={false} mode="wait">
+          {!storeOpen ? (
+            <motion.div
+              key="preview"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
             >
-              <option value="">{storeProvince || "Pilih Provinsi"}</option>
-              {provinces.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gold-200/60">Kota/Kabupaten</label>
-            <select
-              value={storeCityId}
-              onChange={(e) => handleStoreCityChange(e.target.value)}
-              disabled={!storeProvinceId && !storeCity}
-              className={selectClass + " mt-1"}
+              <div className="border-t border-gold-900/10 px-5 py-3">
+                {storeProvince && storeCity ? (
+                  <p className="flex items-center gap-1.5 text-xs text-gold-200/50">
+                    <MapPin size={10} className="text-gold-400" />
+                    {storeCity}, {storeProvince}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gold-200/30">Belum diisi</p>
+                )}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="form"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
             >
-              <option value="">{storeCity || "Pilih Kota/Kabupaten"}</option>
-              {storeCities.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+              <div className="border-t border-gold-900/10 p-5 pt-4 space-y-3">
+                <p className="text-xs text-gold-200/30">
+                  Ditampilkan di halaman split agar pembeli bisa memperkirakan ongkir
+                </p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="block text-sm font-medium text-gold-200/60">Provinsi</label>
+                    <select
+                      value={storeProvinceId}
+                      onChange={(e) => handleStoreProvinceChange(e.target.value)}
+                      className={selectClass + " mt-1"}
+                    >
+                      <option value="">{storeProvince || "Pilih Provinsi"}</option>
+                      {provinces.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gold-200/60">Kota/Kabupaten</label>
+                    <select
+                      value={storeCityId}
+                      onChange={(e) => handleStoreCityChange(e.target.value)}
+                      disabled={!storeProvinceId && !storeCity}
+                      className={selectClass + " mt-1"}
+                    >
+                      <option value="">{storeCity || "Pilih Kota/Kabupaten"}</option>
+                      {storeCities.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
-      <div className="my-8 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
-
-      {/* Shipping Address */}
-      <div>
+      {/* --- Alamat Pengiriman --- */}
+      <div className="overflow-hidden rounded-2xl border border-gold-900/20 bg-surface-200/60">
         <button
           onClick={() => setAddressOpen(!addressOpen)}
-          className="flex w-full items-center justify-between"
+          className="flex w-full items-center justify-between p-5"
         >
           <div className="flex items-center gap-2">
             <MapPin size={16} className="text-gold-400" />
             <h2 className="text-sm font-semibold text-gold-200/60">Alamat Pengiriman Utama</h2>
           </div>
-          {addressOpen ? (
-            <ChevronUp size={16} className="text-gold-200/40" />
-          ) : (
+          <motion.div animate={{ rotate: addressOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
             <ChevronDown size={16} className="text-gold-200/40" />
-          )}
+          </motion.div>
         </button>
 
-        {/* Current saved address preview */}
-        {hasAddress && !addressOpen && (
-          <div className="mt-3 rounded-xl border border-gold-900/15 bg-surface-200/40 p-4">
-            <p className="text-sm font-medium text-gold-100">{profile.address_name}</p>
-            <p className="text-xs text-gold-200/50">{profile.address_phone}</p>
-            <p className="mt-1 text-xs text-gold-200/50">{profile.address_detail}</p>
-            <p className="text-xs text-gold-200/50">
-              {[profile.address_village, profile.address_district, profile.address_city, profile.address_province]
-                .filter(Boolean)
-                .join(", ")}
-            </p>
-            {profile.address_postal_code && (
-              <p className="mt-0.5 font-mono text-xs text-gold-200/30">{profile.address_postal_code}</p>
-            )}
-          </div>
-        )}
-
-        {!hasAddress && !addressOpen && (
-          <p className="mt-2 text-xs text-gold-200/30">Belum ada alamat tersimpan. Klik untuk menambahkan.</p>
-        )}
-
-        {addressOpen && (
-          <div className="mt-4 space-y-3">
+        <AnimatePresence initial={false} mode="wait">
+          {!addressOpen ? (
+            <motion.div
+              key="preview"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            >
+              <div className="border-t border-gold-900/10 px-5 py-3">
+                {hasAddress ? (
+                  <div className="text-xs text-gold-200/50 space-y-0.5">
+                    <p className="font-medium text-gold-100">{profile.address_name}</p>
+                    <p>{profile.address_phone}</p>
+                    <p>
+                      {[profile.address_village, profile.address_district, profile.address_city, profile.address_province]
+                        .filter(Boolean)
+                        .join(", ")}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gold-200/30">Belum ada alamat tersimpan</p>
+                )}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="form"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            >
+              <div className="border-t border-gold-900/10 p-5 pt-4 space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <label className="block text-sm font-medium text-gold-200/60">Nama Penerima</label>
@@ -581,75 +972,104 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
               </div>
             )}
           </div>
-        )}
-      </div>
-
-      <div className="my-8 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
-
-      {/* Bank Account */}
-      <div>
-        <div className="flex items-center gap-2">
-          <CreditCard size={16} className="text-gold-400" />
-          <h2 className="text-sm font-semibold text-gold-200/60">Rekening Bank</h2>
-        </div>
-        <p className="mt-1 text-xs text-gold-200/30">
-          Digunakan sebagai info transfer pembayaran kepada pembeli di split kamu
-        </p>
-
-        <div className="mt-3 space-y-3">
-          <div>
-            <label className="block text-sm font-medium text-gold-200/60">Nama Bank</label>
-            <input
-              type="text"
-              value={bankName}
-              onChange={(e) => setBankName(e.target.value)}
-              placeholder="Contoh: BCA, BNI, BRI, Mandiri, SeaBank"
-              className="input-dark mt-1"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gold-200/60">Nomor Rekening</label>
-            <input
-              type="text"
-              value={bankAccountNumber}
-              onChange={(e) => setBankAccountNumber(e.target.value)}
-              placeholder="Contoh: 1234567890"
-              className="input-dark mt-1 font-mono"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gold-200/60">Nama Pemilik Rekening</label>
-            <input
-              type="text"
-              value={bankAccountName}
-              onChange={(e) => setBankAccountName(e.target.value)}
-              placeholder="Nama sesuai buku tabungan"
-              className="input-dark mt-1"
-            />
-          </div>
-
-          {bankName && bankAccountNumber && bankAccountName && (
-            <div className="rounded-xl border border-gold-900/15 bg-surface-200/40 p-4">
-              <p className="mb-1 text-xs text-gold-200/30">Preview info rekening pembeli:</p>
-              <p className="text-sm font-semibold text-gold-100">{bankName}</p>
-              <p className="font-mono text-base font-bold text-gold-400">{bankAccountNumber}</p>
-              <p className="text-xs text-gold-200/40">a.n. {bankAccountName}</p>
-            </div>
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
 
-      <div className="my-8 h-px bg-gradient-to-r from-transparent via-gold-700/15 to-transparent" />
+      {/* --- Rekening Bank --- */}
+      <div className="overflow-hidden rounded-2xl border border-gold-900/20 bg-surface-200/60">
+        <button
+          onClick={() => setBankOpen(!bankOpen)}
+          className="flex w-full items-center justify-between p-5"
+        >
+          <div className="flex items-center gap-2">
+            <CreditCard size={16} className="text-gold-400" />
+            <h2 className="text-sm font-semibold text-gold-200/60">Rekening Bank</h2>
+          </div>
+          <motion.div animate={{ rotate: bankOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+            <ChevronDown size={16} className="text-gold-200/40" />
+          </motion.div>
+        </button>
+
+        <AnimatePresence initial={false} mode="wait">
+          {!bankOpen ? (
+            <motion.div
+              key="preview"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            >
+              <div className="border-t border-gold-900/10 px-5 py-3">
+                {bankName && bankAccountNumber ? (
+                  <p className="text-xs text-gold-200/50">
+                    {bankName} • {bankAccountNumber.slice(0, 4)}****{bankAccountNumber.slice(-2)} • a.n. {bankAccountName}
+                  </p>
+                ) : (
+                  <p className="text-xs text-gold-200/30">Belum diisi</p>
+                )}
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="form"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2, ease: "easeInOut" }}
+            >
+              <div className="border-t border-gold-900/10 p-5 pt-4 space-y-3">
+                <p className="text-xs text-gold-200/30">
+                  Untuk keperluan penarikan dana saldo
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Nama Bank</label>
+                  <input
+                    type="text"
+                    value={bankName}
+                    onChange={(e) => setBankName(e.target.value)}
+                    placeholder="Contoh: BCA, BNI, BRI, Mandiri, SeaBank"
+                    className="input-dark mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Nomor Rekening</label>
+                  <input
+                    type="text"
+                    value={bankAccountNumber}
+                    onChange={(e) => setBankAccountNumber(e.target.value)}
+                    placeholder="Contoh: 1234567890"
+                    className="input-dark mt-1 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Nama Pemilik Rekening</label>
+                  <input
+                    type="text"
+                    value={bankAccountName}
+                    onChange={(e) => setBankAccountName(e.target.value)}
+                    placeholder="Nama sesuai buku tabungan"
+                    className="input-dark mt-1"
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      </div>{/* end accordion space-y */}
 
       {/* Error / Success */}
       {error && (
-        <div className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+        <div className="mt-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
           {error}
         </div>
       )}
 
       {saved && (
-        <div className="mb-4 flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-400">
+        <div className="mt-6 flex items-center gap-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-400">
           <Check size={16} /> Profil berhasil disimpan
         </div>
       )}
@@ -658,7 +1078,7 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
       <button
         onClick={handleSave}
         disabled={saving}
-        className="btn-gold flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-surface-400 disabled:opacity-50"
+        className="btn-gold mt-6 flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-surface-400 disabled:opacity-50"
       >
         {saving ? (
           <Loader2 size={16} className="animate-spin" />
@@ -667,6 +1087,8 @@ export function ProfileClient({ profile: initialProfile }: { profile: User }) {
         )}
         {saving ? "Menyimpan..." : "Simpan Profil"}
       </button>
+
+      </>}
     </div>
   );
 }

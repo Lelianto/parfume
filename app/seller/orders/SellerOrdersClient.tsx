@@ -4,7 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { OrderStatusBadge } from "@/components/StatusBadge";
-import type { SellerOrder } from "./page";
+import type { SellerOrder } from "@/app/orders/page";
 import {
   Package,
   Droplets,

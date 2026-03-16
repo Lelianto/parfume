@@ -265,7 +265,7 @@ export function OrderDetailClient({
     : null;
 
   return (
-    <div className="mx-auto max-w-2xl px-4 pb-12 pt-20 md:pt-8">
+    <div className="mx-auto max-w-3xl px-4 pb-12 pt-20 sm:px-6 md:pt-8">
       <Link
         href="/my-orders"
         className="mb-6 hidden items-center gap-1.5 text-sm text-gold-200/40 transition-colors hover:text-gold-400 md:inline-flex"
