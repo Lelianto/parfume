@@ -21,6 +21,7 @@ import {
   ShoppingCart,
 } from "lucide-react";
 import { CartButton } from "@/components/CartButton";
+import { setCartUserId } from "@/lib/cart";
 
 export function Navbar() {
   const [user, setUser] = useState<User | null>(null);
@@ -30,12 +31,16 @@ export function Navbar() {
   const isAdminPage = pathname.startsWith("/admin");
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
+    supabase.auth.getUser().then(({ data }) => {
+      setUser(data.user);
+      setCartUserId(data.user?.id ?? null);
+    });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      setCartUserId(session?.user?.id ?? null);
     });
 
     return () => subscription.unsubscribe();

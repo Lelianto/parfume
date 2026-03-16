@@ -28,12 +28,28 @@ export interface CartSellerGroup {
   totalPrice: number;
 }
 
-const CART_KEY = "wangiverse_cart";
+const CART_KEY_PREFIX = "wangiverse_cart_";
+let currentUserId: string | null = null;
+
+export function setCartUserId(userId: string | null) {
+  const changed = currentUserId !== userId;
+  currentUserId = userId;
+  if (changed && typeof window !== "undefined") {
+    window.dispatchEvent(new Event("cart-updated"));
+  }
+}
+
+function getCartKey(): string | null {
+  if (!currentUserId) return null;
+  return CART_KEY_PREFIX + currentUserId;
+}
 
 function getCartItems(): CartItem[] {
   if (typeof window === "undefined") return [];
+  const key = getCartKey();
+  if (!key) return [];
   try {
-    const raw = localStorage.getItem(CART_KEY);
+    const raw = localStorage.getItem(key);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -42,7 +58,9 @@ function getCartItems(): CartItem[] {
 
 function saveCartItems(items: CartItem[]) {
   if (typeof window === "undefined") return;
-  localStorage.setItem(CART_KEY, JSON.stringify(items));
+  const key = getCartKey();
+  if (!key) return;
+  localStorage.setItem(key, JSON.stringify(items));
   window.dispatchEvent(new Event("cart-updated"));
 }
 
