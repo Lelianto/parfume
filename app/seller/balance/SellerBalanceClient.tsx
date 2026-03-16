@@ -213,7 +213,7 @@ export function SellerBalanceClient({
                   placeholder="0"
                   min="1"
                   max={balance.balance}
-                  className="input-dark w-full pl-12"
+                  className="input-dark w-full !pl-8"
                 />
               </div>
               <div className="mt-1.5 flex items-center justify-between">

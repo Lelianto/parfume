@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { SearchFilter } from "./SearchFilter";
 import { SplitGrid } from "./SplitGrid";
@@ -11,10 +11,15 @@ export interface FilterState {
   brand: string;
   concentration: string;
   scent: string;
+  gender: string;
+  brand_type: string;
+  scent_classification: string;
   sort: string;
   price_min: string;
   price_max: string;
 }
+
+export type FormOptionsMap = Record<string, string[]>;
 
 interface HomeListingsProps {
   initialSplits: Split[];
@@ -32,16 +37,45 @@ export function HomeListings({
   const [splits, setSplits] = useState<Split[]>(initialSplits);
   const [loading, setLoading] = useState(false);
   const isFirstRender = useRef(true);
+  const [formOptions, setFormOptions] = useState<FormOptionsMap>({});
+
+  // Compute dynamic price range from all products
+  const priceRange = useMemo(() => {
+    const prices = initialSplits.map((s) => s.price_per_slot).filter((p) => p > 0);
+    if (prices.length === 0) return { min: 0, max: 1000000 };
+    const min = Math.min(...prices);
+    const max = Math.max(...prices);
+    // Round down min to nearest step, round up max to nearest step
+    const step = max <= 100000 ? 5000 : max <= 500000 ? 10000 : 25000;
+    return {
+      min: Math.floor(min / step) * step,
+      max: Math.ceil(max / step) * step,
+      step,
+    };
+  }, [initialSplits]);
 
   const [filters, setFilters] = useState<FilterState>({
     q: "",
     brand: "",
     concentration: "",
     scent: "",
+    gender: "",
+    brand_type: "",
+    scent_classification: "",
     sort: "newest",
     price_min: "",
     price_max: "",
   });
+
+  // Fetch form options for dynamic filters
+  useEffect(() => {
+    fetch("/api/admin/form-options")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && typeof data === "object" && !data.error) setFormOptions(data);
+      })
+      .catch(() => {});
+  }, []);
 
   const fetchSplits = useCallback(async (f: FilterState) => {
     setLoading(true);
@@ -83,14 +117,17 @@ export function HomeListings({
 
       const { data } = await query;
 
-      // Client-side filters (brand, concentration, scent, hidden)
+      // Client-side filters (brand, concentration, scent, gender, brand_type, scent_classification, hidden)
       const active = ((data ?? []) as unknown as Split[]).filter(
         (s) =>
           s.perfume &&
           !s.is_hidden &&
           (!f.brand || s.perfume.brand === f.brand) &&
           (!f.concentration || s.perfume.concentration === f.concentration) &&
-          (!f.scent || s.perfume.scent_family === f.scent)
+          (!f.scent || s.perfume.scent_family === f.scent) &&
+          (!f.gender || s.perfume.gender === f.gender) &&
+          (!f.brand_type || s.perfume.brand_type === f.brand_type) &&
+          (!f.scent_classification || s.perfume.scent_classification === f.scent_classification)
       );
 
       // Compute avg_rating
@@ -132,6 +169,9 @@ export function HomeListings({
       brand: "",
       concentration: "",
       scent: "",
+      gender: "",
+      brand_type: "",
+      scent_classification: "",
       sort: "newest",
       price_min: "",
       price_max: "",
@@ -143,6 +183,8 @@ export function HomeListings({
       <div className="mt-4 sm:mt-6">
         <SearchFilter
           brands={brands}
+          formOptions={formOptions}
+          priceRange={priceRange}
           filters={filters}
           onFilterChange={handleFilterChange}
           onClearAll={handleClearAll}

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { Search, X, SlidersHorizontal } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Concentration } from "@/types/database";
-import type { FilterState } from "./HomeListings";
+import type { FilterState, FormOptionsMap } from "./HomeListings";
 
 const CONCENTRATIONS: Concentration[] = ["EDP", "EDT", "Parfum", "EDC", "Cologne"];
 const SORT_OPTIONS = [
@@ -12,11 +12,10 @@ const SORT_OPTIONS = [
   { value: "price_asc", label: "Harga Terendah" },
   { value: "price_desc", label: "Harga Tertinggi" },
 ];
-const SCENT_FAMILIES = ["Woody", "Floral", "Oriental", "Fresh", "Citrus", "Aquatic", "Gourmand", "Aromatic"];
 
-const PRICE_MIN = 0;
-const PRICE_MAX = 2000000;
-const PRICE_STEP = 25000;
+const DEFAULT_PRICE_MIN = 0;
+const DEFAULT_PRICE_MAX = 1000000;
+const DEFAULT_PRICE_STEP = 25000;
 
 function formatRupiahShort(val: number) {
   if (val >= 1000000) return `${(val / 1000000).toFixed(val % 1000000 === 0 ? 0 : 1)}jt`;
@@ -26,20 +25,35 @@ function formatRupiahShort(val: number) {
 
 interface SearchFilterProps {
   brands: string[];
+  formOptions: FormOptionsMap;
+  priceRange: { min: number; max: number; step?: number };
   filters: FilterState;
   onFilterChange: (updates: Partial<FilterState>) => void;
   onClearAll: () => void;
 }
 
-export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: SearchFilterProps) {
+export function SearchFilter({ brands, formOptions, priceRange, filters, onFilterChange, onClearAll }: SearchFilterProps) {
+  const PRICE_MIN = priceRange.min ?? DEFAULT_PRICE_MIN;
+  const PRICE_MAX = priceRange.max ?? DEFAULT_PRICE_MAX;
+  const PRICE_STEP = priceRange.step ?? DEFAULT_PRICE_STEP;
+
   const [search, setSearch] = useState(filters.q);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Derive dynamic options from formOptions, merging with DB brands
+  const allBrands = [...new Set([...brands, ...(formOptions.brand ?? [])])].sort();
+  const scentClassifications = formOptions.scent_classification ?? [];
+  const genderOptions = formOptions.gender ?? [];
+  const brandTypeOptions = formOptions.brand_type ?? [];
 
   // Mobile temp state
   const [tempBrand, setTempBrand] = useState(filters.brand);
   const [tempConcentration, setTempConcentration] = useState(filters.concentration);
   const [tempSort, setTempSort] = useState(filters.sort);
   const [tempScent, setTempScent] = useState(filters.scent);
+  const [tempGender, setTempGender] = useState(filters.gender);
+  const [tempBrandType, setTempBrandType] = useState(filters.brand_type);
+  const [tempScentClassification, setTempScentClassification] = useState(filters.scent_classification);
   const [tempPriceMin, setTempPriceMin] = useState(Number(filters.price_min) || PRICE_MIN);
   const [tempPriceMax, setTempPriceMax] = useState(Number(filters.price_max) || PRICE_MAX);
 
@@ -59,6 +73,9 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
       setTempConcentration(filters.concentration);
       setTempSort(filters.sort);
       setTempScent(filters.scent);
+      setTempGender(filters.gender);
+      setTempBrandType(filters.brand_type);
+      setTempScentClassification(filters.scent_classification);
       setTempPriceMin(Number(filters.price_min) || PRICE_MIN);
       setTempPriceMax(Number(filters.price_max) || PRICE_MAX);
       setDesktopPriceMin(Number(filters.price_min) || PRICE_MIN);
@@ -79,11 +96,14 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
   const currentPriceMin = Number(filters.price_min) || PRICE_MIN;
   const currentPriceMax = Number(filters.price_max) || PRICE_MAX;
   const hasPriceFilter = currentPriceMin > PRICE_MIN || currentPriceMax < PRICE_MAX;
-  const hasFilters = filters.q || filters.brand || filters.concentration || filters.scent || filters.sort !== "newest" || hasPriceFilter;
+  const hasFilters = filters.q || filters.brand || filters.concentration || filters.scent || filters.gender || filters.brand_type || filters.scent_classification || filters.sort !== "newest" || hasPriceFilter;
   const activeFilterCount = [
     filters.brand,
     filters.concentration,
     filters.scent,
+    filters.gender,
+    filters.brand_type,
+    filters.scent_classification,
     filters.sort !== "newest" ? filters.sort : "",
     hasPriceFilter ? "price" : "",
   ].filter(Boolean).length;
@@ -107,6 +127,9 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
       concentration: tempConcentration,
       sort: tempSort,
       scent: tempScent,
+      gender: tempGender,
+      brand_type: tempBrandType,
+      scent_classification: tempScentClassification,
       price_min: min,
       price_max: max,
     });
@@ -118,6 +141,9 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
     setTempConcentration("");
     setTempSort("newest");
     setTempScent("");
+    setTempGender("");
+    setTempBrandType("");
+    setTempScentClassification("");
     setTempPriceMin(PRICE_MIN);
     setTempPriceMax(PRICE_MAX);
   }
@@ -137,7 +163,7 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
         </span>
         <span className="text-[11px] text-gold-200/30">—</span>
         <span className="rounded-lg bg-surface-300 px-2.5 py-1 font-mono text-[11px] text-gold-300">
-          {max >= PRICE_MAX ? "2jt+" : formatRupiahShort(max)}
+          {max >= PRICE_MAX ? `${formatRupiahShort(PRICE_MAX)}+` : formatRupiahShort(max)}
         </span>
       </div>
       <div className="relative h-5 flex items-center">
@@ -205,46 +231,68 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {brands.length > 0 && (
+          {allBrands.length > 0 && (
             <select
               value={filters.brand}
               onChange={(e) => onFilterChange({ brand: e.target.value })}
               className="input-dark !w-auto !rounded-lg !py-2 !pl-3 !pr-8 text-xs"
             >
               <option value="">Semua Brand</option>
-              {brands.map((b) => (
+              {allBrands.map((b) => (
                 <option key={b} value={b}>{b}</option>
               ))}
             </select>
           )}
 
-          {CONCENTRATIONS.map((c) => (
-            <button
-              key={c}
-              onClick={() => onFilterChange({ concentration: filters.concentration === c ? "" : c })}
-              className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
-                filters.concentration === c
-                  ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
-                  : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
-              }`}
-            >
-              {c}
-            </button>
-          ))}
+          <select
+            value={filters.concentration}
+            onChange={(e) => onFilterChange({ concentration: e.target.value })}
+            className="input-dark !w-auto !rounded-lg !py-2 !pl-3 !pr-8 text-xs"
+          >
+            <option value="">Semua Konsentrasi</option>
+            {CONCENTRATIONS.map((c) => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
 
-          {SCENT_FAMILIES.map((sf) => (
-            <button
-              key={sf}
-              onClick={() => onFilterChange({ scent: filters.scent === sf ? "" : sf })}
-              className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
-                filters.scent === sf
-                  ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
-                  : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
-              }`}
+          {genderOptions.length > 0 && (
+            <select
+              value={filters.gender}
+              onChange={(e) => onFilterChange({ gender: e.target.value })}
+              className="input-dark !w-auto !rounded-lg !py-2 !pl-3 !pr-8 text-xs"
             >
-              {sf}
-            </button>
-          ))}
+              <option value="">Semua Gender</option>
+              {genderOptions.map((g) => (
+                <option key={g} value={g}>{g}</option>
+              ))}
+            </select>
+          )}
+
+          {brandTypeOptions.length > 0 && (
+            <select
+              value={filters.brand_type}
+              onChange={(e) => onFilterChange({ brand_type: e.target.value })}
+              className="input-dark !w-auto !rounded-lg !py-2 !pl-3 !pr-8 text-xs"
+            >
+              <option value="">Semua Tipe Brand</option>
+              {brandTypeOptions.map((bt) => (
+                <option key={bt} value={bt}>{bt}</option>
+              ))}
+            </select>
+          )}
+
+          {scentClassifications.length > 0 && (
+            <select
+              value={filters.scent_classification}
+              onChange={(e) => onFilterChange({ scent_classification: e.target.value })}
+              className="input-dark !w-auto !rounded-lg !py-2 !pl-3 !pr-8 text-xs"
+            >
+              <option value="">Semua Klasifikasi Aroma</option>
+              {scentClassifications.map((sc) => (
+                <option key={sc} value={sc}>{sc}</option>
+              ))}
+            </select>
+          )}
 
           {/* Price filter dropdown */}
           <div className="relative">
@@ -257,7 +305,7 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
               }`}
             >
               {hasPriceFilter
-                ? `${formatRupiahShort(currentPriceMin)} – ${currentPriceMax >= PRICE_MAX ? "2jt+" : formatRupiahShort(currentPriceMax)}`
+                ? `${formatRupiahShort(currentPriceMin)} – ${currentPriceMax >= PRICE_MAX ? `${formatRupiahShort(PRICE_MAX)}+` : formatRupiahShort(currentPriceMax)}`
                 : "Harga"}
             </button>
 
@@ -368,7 +416,7 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
               className="overflow-hidden"
             >
               <div className="mt-3 space-y-4 rounded-2xl border border-gold-900/20 bg-surface-200/80 p-4">
-                {brands.length > 0 && (
+                {allBrands.length > 0 && (
                   <div>
                     <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Brand</p>
                     <select
@@ -377,7 +425,7 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
                       className="input-dark w-full !rounded-lg !py-2.5 !pl-3 !pr-8 text-sm"
                     >
                       <option value="">Semua Brand</option>
-                      {brands.map((b) => (
+                      {allBrands.map((b) => (
                         <option key={b} value={b}>{b}</option>
                       ))}
                     </select>
@@ -386,43 +434,83 @@ export function SearchFilter({ brands, filters, onFilterChange, onClearAll }: Se
 
                 <div>
                   <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Konsentrasi</p>
-                  <div className="flex flex-wrap gap-1.5">
+                  <select
+                    value={tempConcentration}
+                    onChange={(e) => setTempConcentration(e.target.value)}
+                    className="input-dark w-full !rounded-lg !py-2.5 !pl-3 !pr-8 text-sm"
+                  >
+                    <option value="">Semua Konsentrasi</option>
                     {CONCENTRATIONS.map((c) => (
-                      <button
-                        key={c}
-                        type="button"
-                        onClick={() => setTempConcentration(tempConcentration === c ? "" : c)}
-                        className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
-                          tempConcentration === c
-                            ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
-                            : "bg-surface-300 text-gold-200/50 ring-1 ring-gold-900/30"
-                        }`}
-                      >
-                        {c}
-                      </button>
+                      <option key={c} value={c}>{c}</option>
                     ))}
-                  </div>
+                  </select>
                 </div>
 
-                <div>
-                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Scent Family</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {SCENT_FAMILIES.map((sf) => (
-                      <button
-                        key={sf}
-                        type="button"
-                        onClick={() => setTempScent(tempScent === sf ? "" : sf)}
-                        className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
-                          tempScent === sf
-                            ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
-                            : "bg-surface-300 text-gold-200/50 ring-1 ring-gold-900/30"
-                        }`}
-                      >
-                        {sf}
-                      </button>
-                    ))}
+                {genderOptions.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Gender</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {genderOptions.map((g) => (
+                        <button
+                          key={g}
+                          type="button"
+                          onClick={() => setTempGender(tempGender === g ? "" : g)}
+                          className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
+                            tempGender === g
+                              ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
+                              : "bg-surface-300 text-gold-200/50 ring-1 ring-gold-900/30"
+                          }`}
+                        >
+                          {g}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {brandTypeOptions.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Tipe Brand</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {brandTypeOptions.map((bt) => (
+                        <button
+                          key={bt}
+                          type="button"
+                          onClick={() => setTempBrandType(tempBrandType === bt ? "" : bt)}
+                          className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
+                            tempBrandType === bt
+                              ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
+                              : "bg-surface-300 text-gold-200/50 ring-1 ring-gold-900/30"
+                          }`}
+                        >
+                          {bt}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {scentClassifications.length > 0 && (
+                  <div>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-gold-200/40">Klasifikasi Aroma</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {scentClassifications.map((sc) => (
+                        <button
+                          key={sc}
+                          type="button"
+                          onClick={() => setTempScentClassification(tempScentClassification === sc ? "" : sc)}
+                          className={`rounded-lg px-3 py-1.5 text-[11px] font-medium transition-all ${
+                            tempScentClassification === sc
+                              ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
+                              : "bg-surface-300 text-gold-200/50 ring-1 ring-gold-900/30"
+                          }`}
+                        >
+                          {sc}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Price range mobile */}
                 <div>
