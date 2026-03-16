@@ -17,7 +17,7 @@ export default async function ProfilePage() {
 
   const [profileResult, balanceResult, withdrawalsResult] = await Promise.all([
     supabase.from("users").select("*").eq("id", user.id).single(),
-    supabase.from("seller_balances").select("*").eq("user_id", user.id).single(),
+    supabase.from("seller_balances").select("*").eq("user_id", user.id).maybeSingle(),
     supabase
       .from("withdrawals")
       .select("*")
