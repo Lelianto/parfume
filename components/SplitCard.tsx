@@ -82,7 +82,7 @@ export function SplitCard({ split, isLoggedIn = false, wishlisted = false }: Spl
 
           {/* Concentration badge */}
           {split.perfume?.concentration && (
-            <span className="mt-1.5 inline-block rounded-full bg-gold-400/10 px-2 py-0.5 text-[10px] font-semibold text-gold-400">
+            <span className="mt-1.5 inline-block max-w-fit rounded-full bg-gold-400/10 px-2 py-0.5 text-[10px] font-semibold text-gold-400">
               {split.perfume.concentration}
             </span>
           )}

@@ -88,11 +88,10 @@ export function OrdersClient({
       <div className="mt-6 flex gap-1 rounded-xl bg-surface-200/60 p-1">
         <button
           onClick={() => handleTabChange("purchases")}
-          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
-            tab === "purchases"
+          className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${tab === "purchases"
               ? "bg-gold-400/20 text-gold-400 shadow-sm"
               : "text-gold-200/50 hover:text-gold-200/70"
-          }`}
+            }`}
         >
           <ShoppingBag size={16} />
           Pembelian
@@ -103,11 +102,10 @@ export function OrdersClient({
         {hasSplits && (
           <button
             onClick={() => handleTabChange("sales")}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
-              tab === "sales"
+            className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${tab === "sales"
                 ? "bg-gold-400/20 text-gold-400 shadow-sm"
                 : "text-gold-200/50 hover:text-gold-200/70"
-            }`}
+              }`}
           >
             <ClipboardList size={16} />
             Penjualan
@@ -147,7 +145,7 @@ export function OrdersClient({
                           </div>
                           <div>
                             <p className="text-sm font-medium text-gold-100">
-                              Pesanan Group · {groupOrders.length} item
+                              Pesanan Grup · {groupOrders.length} item
                             </p>
                             <p className="text-xs text-gold-200/40">
                               {group.seller?.name || "Seller"}
@@ -266,11 +264,10 @@ export function OrdersClient({
                 <button
                   key={opt.value}
                   onClick={() => setSellerFilter(opt.value)}
-                  className={`ml-1 mt-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${
-                    sellerFilter === opt.value
+                  className={`ml-1 mt-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs font-medium transition-all ${sellerFilter === opt.value
                       ? "bg-gold-400/20 text-gold-400 ring-1 ring-gold-400/40"
                       : "bg-surface-200 text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
-                  }`}
+                    }`}
                 >
                   {opt.label}
                   {count > 0 && (

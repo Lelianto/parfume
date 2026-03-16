@@ -17,12 +17,11 @@ export default async function OrderGroupDetailPage({
 
   if (!user) redirect("/login?redirectTo=/order-group/" + id);
 
-  const [{ data: group }, { data: platformSettings }] = await Promise.all([
+  const [groupResult, { data: platformSettings }] = await Promise.all([
     supabase
       .from("order_groups")
       .select(
-        `*, seller:users!order_groups_seller_id_fkey(*),
-         orders:orders(*, split:splits(*, perfume:perfumes(*)), variant:split_variants(*))`
+        `*, orders:orders(*, split:splits(*, perfume:perfumes(*)), variant:split_variants(*))`
       )
       .eq("id", id)
       .eq("user_id", user.id)
@@ -34,7 +33,21 @@ export default async function OrderGroupDetailPage({
       .single(),
   ]);
 
-  if (!group) notFound();
+  if (groupResult.error) {
+    console.error("Order group fetch error:", groupResult.error);
+  }
+
+  const groupData = groupResult.data;
+  if (!groupData) notFound();
+
+  // Fetch seller separately (FK goes to auth.users, not public.users)
+  const { data: seller } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", groupData.seller_id)
+    .single();
+
+  const group = { ...groupData, seller };
 
   return (
     <OrderGroupDetailClient

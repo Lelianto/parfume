@@ -114,7 +114,7 @@ export function OrderGroupDetailClient({
   const orders = group.orders ?? [];
 
   const waMessage = encodeURIComponent(
-    `Halo kak, saya ingin menanyakan pesanan group saya di Wangiverse.\n\nGroup ID: ${group.id.slice(0, 8).toUpperCase()}`
+    `Halo kak, saya ingin menanyakan pesanan grup saya di Wangiverse.\n\nGroup ID: ${group.id.slice(0, 8).toUpperCase()}`
   );
   const waUrl = seller?.whatsapp
     ? `https://wa.me/${seller.whatsapp.replace(/\D/g, "")}?text=${waMessage}`
@@ -125,12 +125,18 @@ export function OrderGroupDetailClient({
     const { data } = await supabase
       .from("order_groups")
       .select(
-        `*, seller:users!order_groups_seller_id_fkey(*),
-         orders:orders(*, split:splits(*, perfume:perfumes(*)), variant:split_variants(*))`
+        `*, orders:orders(*, split:splits(*, perfume:perfumes(*)), variant:split_variants(*))`
       )
       .eq("id", group.id)
       .single();
-    if (data) setGroup(data as unknown as OrderGroup);
+    if (data) {
+      const { data: seller } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", data.seller_id)
+        .single();
+      setGroup({ ...data, seller } as unknown as OrderGroup);
+    }
   }, [group.id]);
 
   async function handleFetchOngkir() {
@@ -209,7 +215,7 @@ export function OrderGroupDetailClient({
       <div className="flex items-start justify-between">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-gold-400/70">
-            Pesanan Group
+            Pesanan Grup
           </p>
           <h1 className="font-display text-xl font-bold text-gold-100">
             {orders.length} item dari {seller?.name || "Seller"}
@@ -317,11 +323,10 @@ export function OrderGroupDetailClient({
                           <button
                             key={`${cost.code}-${cost.service}-${i}`}
                             onClick={() => setSelectedShipping(cost)}
-                            className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-all ${
-                              isSelected
-                                ? "border border-gold-500/50 bg-gold-400/10 ring-1 ring-gold-400/30"
-                                : "border border-gold-900/15 bg-surface-300/50 hover:border-gold-700/30"
-                            }`}
+                            className={`flex w-full items-center justify-between rounded-lg px-4 py-3 text-left transition-all ${isSelected
+                              ? "border border-gold-500/50 bg-gold-400/10 ring-1 ring-gold-400/30"
+                              : "border border-gold-900/15 bg-surface-300/50 hover:border-gold-700/30"
+                              }`}
                           >
                             <div>
                               <p className={`text-sm font-medium ${isSelected ? "text-gold-100" : "text-gold-200/70"}`}>

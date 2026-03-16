@@ -20,13 +20,10 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Fetch order group with seller info
+  // Fetch order group
   const { data: group } = await supabase
     .from("order_groups")
-    .select(
-      `status, shipping_city, shipping_district, shipping_village, shipping_city_id,
-       seller:users!order_groups_seller_id_fkey(store_city, store_city_id)`
-    )
+    .select("status, seller_id, shipping_city, shipping_district, shipping_village, shipping_city_id")
     .eq("id", groupId)
     .eq("user_id", user.id)
     .single();
@@ -42,8 +39,13 @@ export async function GET(
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sellerData = group.seller as any;
+  // Fetch seller separately
+  const { data: sellerData } = await supabase
+    .from("users")
+    .select("store_city, store_city_id")
+    .eq("id", group.seller_id)
+    .single();
+
   const sellerCity: string | null = sellerData?.store_city ?? null;
   const buyerCity = group.shipping_city;
 

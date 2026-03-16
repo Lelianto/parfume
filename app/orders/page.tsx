@@ -26,14 +26,30 @@ export default async function OrdersPage() {
     .order("created_at", { ascending: false });
 
   // Fetch order groups
-  const { data: orderGroups } = await supabase
+  const { data: rawGroups } = await supabase
     .from("order_groups")
     .select(
-      `*, seller:users!order_groups_seller_id_fkey(name, avatar_url, city, store_city),
-       orders:orders(*, split:splits(*, perfume:perfumes(*)), variant:split_variants(*))`
+      `*, orders:orders(*, split:splits(*, perfume:perfumes(*)), variant:split_variants(*))`
     )
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
+
+  // Fetch sellers for groups separately
+  const sellerIds = [...new Set((rawGroups ?? []).map((g) => g.seller_id))];
+  const sellersMap: Record<string, { name: string; avatar_url: string | null; city: string | null; store_city: string | null }> = {};
+  if (sellerIds.length > 0) {
+    const { data: sellers } = await supabase
+      .from("users")
+      .select("id, name, avatar_url, city, store_city")
+      .in("id", sellerIds);
+    for (const s of sellers ?? []) {
+      sellersMap[s.id] = s;
+    }
+  }
+  const orderGroups = (rawGroups ?? []).map((g) => ({
+    ...g,
+    seller: sellersMap[g.seller_id] ?? null,
+  }));
 
   // Fetch seller splits
   const { data: splits } = await supabase

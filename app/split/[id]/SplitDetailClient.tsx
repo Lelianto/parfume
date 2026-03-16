@@ -370,7 +370,7 @@ export function SplitDetailClient({
           </div>
 
           {/* CTA */}
-          {split.status === "open" && (
+          {split.status !== "completed" && (
             <div className="mt-8">
               {isLoggedIn ? (
                 hasOrder ? (
