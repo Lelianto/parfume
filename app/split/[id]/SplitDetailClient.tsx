@@ -27,6 +27,10 @@ import {
   EyeOff,
   MapPin,
   ShoppingCart,
+  X,
+  ZoomIn,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 import { formatRupiah } from "@/lib/utils";
@@ -35,7 +39,6 @@ export function SplitDetailClient({
   split,
   reviews,
   isLoggedIn,
-  hasOrder,
   canReview,
   isCreator,
   orders,
@@ -43,7 +46,6 @@ export function SplitDetailClient({
   split: Split;
   reviews: Review[];
   isLoggedIn: boolean;
-  hasOrder: boolean;
   canReview: boolean;
   isCreator: boolean;
   orders: (Order & { user?: { name: string; avatar_url: string | null } })[];
@@ -60,6 +62,14 @@ export function SplitDetailClient({
   const [shippingReceipt, setShippingReceipt] = useState<Record<string, string>>({});
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isHidden, setIsHidden] = useState(split.is_hidden ?? false);
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
+  const [activePhoto, setActivePhoto] = useState(0);
+  const [videoModal, setVideoModal] = useState(false);
+
+  // Build photos array from photo_urls or fallback to bottle_photo_url
+  const photos = (split.photo_urls?.length ?? 0) > 0
+    ? split.photo_urls
+    : split.bottle_photo_url ? [split.bottle_photo_url] : [];
   const router = useRouter();
 
   // Calculate totals from variants
@@ -143,50 +153,140 @@ export function SplitDetailClient({
       </Link>
 
       <div className="grid gap-10 md:grid-cols-2">
-        {/* Images */}
-        <div className="space-y-4">
-          <div className="relative aspect-[4/5] overflow-hidden rounded-[1.25rem] border border-gold-900/15 bg-surface-300">
-            {split.bottle_photo_url ? (
-              <Image
-                src={split.bottle_photo_url}
-                alt="Foto Botol"
-                fill
-                className="object-cover"
-              />
+        {/* Images Gallery */}
+        <div className="space-y-3">
+          {/* Main photo with navigation */}
+          <div
+            className={`relative aspect-[4/5] overflow-hidden rounded-[1.25rem] border border-gold-900/15 bg-surface-300 ${photos.length > 0 ? "cursor-zoom-in" : ""}`}
+            onClick={() => photos[activePhoto] && setLightbox({ src: photos[activePhoto], alt: `Foto Produk ${activePhoto + 1}` })}
+          >
+            {photos.length > 0 ? (
+              <>
+                <Image
+                  src={photos[activePhoto]}
+                  alt={`Foto Produk ${activePhoto + 1}`}
+                  fill
+                  className="object-cover transition-opacity duration-300"
+                  priority
+                />
+                <div className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white/70">
+                  <ZoomIn size={14} />
+                </div>
+                {/* Photo counter */}
+                {photos.length > 1 && (
+                  <div className="absolute left-3 top-3 rounded-lg bg-black/50 px-2.5 py-1 text-[11px] font-medium text-white/80">
+                    {activePhoto + 1} / {photos.length}
+                  </div>
+                )}
+                {/* Navigation arrows */}
+                {photos.length > 1 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setActivePhoto((p) => (p - 1 + photos.length) % photos.length); }}
+                      className="absolute left-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/80 transition-colors hover:bg-black/60"
+                    >
+                      <ChevronLeft size={18} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); setActivePhoto((p) => (p + 1) % photos.length); }}
+                      className="absolute right-2 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-black/40 text-white/80 transition-colors hover:bg-black/60"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </>
+                )}
+              </>
             ) : (
               <div className="flex h-full items-center justify-center text-gold-800/20">
                 <Droplets size={64} />
               </div>
             )}
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            {split.batch_code_photo_url && (
-              <div className="relative aspect-square overflow-hidden rounded-xl border border-gold-900/15 bg-surface-300">
-                <Image
-                  src={split.batch_code_photo_url}
-                  alt="Batch Code"
-                  fill
-                  className="object-cover"
+
+          {/* Thumbnail strip */}
+          {(photos.length > 1 || split.batch_code_photo_url || split.decant_video_url) && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {/* Product photo thumbnails */}
+              {photos.map((url, idx) => (
+                <button
+                  key={`photo-${idx}`}
+                  type="button"
+                  onClick={() => setActivePhoto(idx)}
+                  className={`relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
+                    activePhoto === idx ? "border-gold-400 shadow-lg shadow-gold-400/20" : "border-gold-900/15 opacity-60 hover:opacity-100"
+                  }`}
+                >
+                  <Image src={url} alt={`Foto ${idx + 1}`} fill className="object-cover" />
+                </button>
+              ))}
+
+              {/* Batch code thumbnail */}
+              {split.batch_code_photo_url && (
+                <button
+                  type="button"
+                  onClick={() => setLightbox({ src: split.batch_code_photo_url!, alt: "Foto Batch Code" })}
+                  className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 border-gold-900/15 opacity-60 transition-all hover:opacity-100"
+                >
+                  <Image src={split.batch_code_photo_url} alt="Batch Code" fill className="object-cover" />
+                  <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/70 to-transparent pb-1">
+                    <span className="text-[8px] font-medium text-white/80">Batch</span>
+                  </div>
+                </button>
+              )}
+
+              {/* Video thumbnail */}
+              {split.decant_video_url && (
+                <button
+                  type="button"
+                  onClick={() => setVideoModal(true)}
+                  className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg border-2 border-gold-900/15 opacity-60 transition-all hover:opacity-100"
+                >
+                  <video
+                    src={split.decant_video_url}
+                    preload="metadata"
+                    crossOrigin="anonymous"
+                    className="h-full w-full object-cover"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                    <Video size={14} className="text-white/80" />
+                  </div>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Video placeholder → opens modal */}
+          {split.decant_video_url && (
+            <button
+              type="button"
+              onClick={() => setVideoModal(true)}
+              className="group relative flex w-full items-center gap-3 overflow-hidden rounded-xl border border-gold-900/15 bg-surface-300 p-4 text-left transition-all hover:border-gold-700/30 hover:bg-surface-200"
+            >
+              {/* Thumbnail preview */}
+              <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-surface-400">
+                <video
+                  src={split.decant_video_url}
+                  preload="metadata"
+                  crossOrigin="anonymous"
+                  className="h-full w-full object-cover"
                 />
-                <div className="absolute bottom-2.5 left-2.5 flex items-center gap-1 rounded-lg bg-black/60 px-2.5 py-1 text-[11px] text-gold-200/80">
-                  <Camera size={11} /> Batch Code
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gold-400/90 shadow-lg transition-transform group-hover:scale-110">
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 h-4 w-4 text-surface-400">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  </div>
                 </div>
               </div>
-            )}
-            {split.decant_video_url && (
-              <a
-                href={split.decant_video_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex aspect-square items-center justify-center rounded-xl border border-gold-900/15 bg-surface-300 text-gold-200/30 transition-colors hover:border-gold-700/30 hover:text-gold-400"
-              >
-                <div className="text-center">
-                  <Video size={28} className="mx-auto" />
-                  <p className="mt-2 text-xs">Lihat Video Decant</p>
-                </div>
-              </a>
-            )}
-          </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-gold-100">Video Decant</p>
+                <p className="mt-0.5 text-xs text-gold-200/40">Ketuk untuk memutar video</p>
+              </div>
+              <Video size={18} className="shrink-0 text-gold-200/30 transition-colors group-hover:text-gold-400" />
+            </button>
+          )}
         </div>
 
         {/* Details */}
@@ -352,9 +452,9 @@ export function SplitDetailClient({
 
           {/* Trust indicators */}
           <div className="mt-6 flex flex-wrap gap-2">
-            {split.bottle_photo_url && (
+            {photos.length > 0 && (
               <div className="flex items-center gap-1.5 rounded-lg border border-emerald-500/15 bg-emerald-500/[0.07] px-3 py-1.5 text-[11px] font-medium text-emerald-400">
-                <ShieldCheck size={13} /> Foto Botol
+                <ShieldCheck size={13} /> {photos.length} Foto Produk
               </div>
             )}
             {split.batch_code_photo_url && (
@@ -373,22 +473,6 @@ export function SplitDetailClient({
           {split.status !== "completed" && (
             <div className="mt-8">
               {isLoggedIn ? (
-                hasOrder ? (
-                  <div className="space-y-3">
-                    <p className="text-sm font-medium text-emerald-400">
-                      Kamu sudah bergabung di split ini.
-                    </p>
-                    {/* Still allow add to cart for different variants */}
-                    {selectedVariant && (selectedVariant.stock - selectedVariant.sold) > 0 && (
-                      <button
-                        onClick={() => setShowCartModal(true)}
-                        className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
-                      >
-                        <ShoppingCart size={16} /> Tambah ke Keranjang
-                      </button>
-                    )}
-                  </div>
-                ) : (
                   <div className="space-y-3">
                     <button
                       onClick={() => setShowModal(true)}
@@ -406,7 +490,6 @@ export function SplitDetailClient({
                       </button>
                     )}
                   </div>
-                )
               ) : (
                 <Link
                   href={`/login?redirectTo=/split/${split.id}`}
@@ -627,7 +710,68 @@ export function SplitDetailClient({
         />
       )}
 
+      {/* Video Modal */}
+      {videoModal && split.decant_video_url && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm"
+          onClick={() => setVideoModal(false)}
+        >
+          <button
+            onClick={() => setVideoModal(false)}
+            className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+          >
+            <X size={20} />
+          </button>
+          <div
+            className="relative w-full max-w-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="overflow-hidden rounded-xl">
+              <video
+                src={split.decant_video_url}
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                crossOrigin="anonymous"
+                className="aspect-[9/16] w-full bg-black object-contain"
+              />
+            </div>
+            <p className="mt-3 text-center text-sm text-white/60">Video Decant</p>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            onClick={() => setLightbox(null)}
+            className="absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white transition-colors hover:bg-white/20"
+          >
+            <X size={20} />
+          </button>
+          <div
+            className="relative max-h-[90vh] max-w-[90vw]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Image
+              src={lightbox.src}
+              alt={lightbox.alt}
+              width={1200}
+              height={1600}
+              className="max-h-[90vh] w-auto rounded-xl object-contain"
+              quality={95}
+            />
+            <p className="mt-3 text-center text-sm text-white/60">{lightbox.alt}</p>
+          </div>
+        </div>
+      )}
+
       {showDeleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="w-full max-w-sm rounded-2xl border border-gold-900/20 bg-surface-300 p-6">

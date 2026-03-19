@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Navbar } from "@/components/Navbar";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -37,10 +39,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="id">
+    <html lang="id" suppressHydrationWarning>
       <body>
-        <Navbar />
-        <main className="min-h-[calc(100vh-72px)]">{children}</main>
+        <ThemeProvider>
+          <ThemeToggle />
+          <Navbar />
+          <main className="min-h-[calc(100vh-72px)]">{children}</main>
+        </ThemeProvider>
       </body>
     </html>
   );

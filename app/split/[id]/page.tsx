@@ -109,7 +109,7 @@ export default async function SplitDetailPage({ params }: Props) {
       split={split as unknown as Split}
       reviews={(reviews ?? []) as unknown as Review[]}
       isLoggedIn={!!user}
-      hasOrder={hasOrder}
+
       canReview={hasCompletedOrder && !hasReviewed}
       isCreator={isCreator}
       orders={splitOrders}

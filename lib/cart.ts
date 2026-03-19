@@ -129,6 +129,12 @@ export function clearCartForSeller(sellerId: string) {
   saveCartItems(items);
 }
 
+export function clearCartForSellers(sellerIds: string[]) {
+  const idSet = new Set(sellerIds);
+  const items = getCartItems().filter((i) => !idSet.has(i.sellerId));
+  saveCartItems(items);
+}
+
 export function clearCart() {
   saveCartItems([]);
 }

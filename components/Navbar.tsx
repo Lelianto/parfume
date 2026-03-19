@@ -182,11 +182,11 @@ export function Navbar() {
           onClick={() => setMenuOpen(!menuOpen)}
           animate={{
             boxShadow: menuOpen
-              ? "0 0 20px rgba(212, 175, 55, 0.4)"
+              ? "0 0 20px color-mix(in srgb, var(--color-gold-400) 40%, transparent)"
               : [
-                  "0 0 0px rgba(212, 175, 55, 0)",
-                  "0 0 15px rgba(212, 175, 55, 0.3)",
-                  "0 0 0px rgba(212, 175, 55, 0)",
+                  "0 0 0px transparent",
+                  "0 0 15px color-mix(in srgb, var(--color-gold-400) 30%, transparent)",
+                  "0 0 0px transparent",
                 ],
           }}
           transition={{

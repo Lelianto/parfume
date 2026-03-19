@@ -80,6 +80,7 @@ export interface Split {
   price_per_slot: number;
   batch_code: string | null;
   bottle_photo_url: string | null;
+  photo_urls: string[];
   batch_code_photo_url: string | null;
   decant_video_url: string | null;
   status: SplitStatus;
@@ -174,10 +175,34 @@ export interface OrderGroup {
   shipping_postal_code: string | null;
   shipping_address: string | null;
   shipping_city_id: number | null;
+  checkout_id: string | null;
   created_at: string;
   // joined
   orders?: (Order & { split?: Split & { perfume?: Perfume }; variant?: SplitVariant })[];
   seller?: User;
+}
+
+export interface Checkout {
+  id: string;
+  user_id: string;
+  status: OrderStatus;
+  shipping_name: string | null;
+  shipping_phone: string | null;
+  shipping_province: string | null;
+  shipping_city: string | null;
+  shipping_district: string | null;
+  shipping_village: string | null;
+  shipping_postal_code: string | null;
+  shipping_address: string | null;
+  shipping_city_id: number | null;
+  grand_total: number;
+  total_product_price: number;
+  total_shipping_cost: number;
+  payment_proof_url: string | null;
+  payment_deadline: string | null;
+  created_at: string;
+  // joined
+  order_groups?: (OrderGroup & { seller?: User })[];
 }
 
 export interface Review {

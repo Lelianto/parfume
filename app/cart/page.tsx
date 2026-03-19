@@ -1,7 +1,7 @@
 import { CartClient } from "./CartClient";
 
 export const metadata = {
-  title: "Keranjang — Wangiverse",
+  title: "Keranjang & Checkout — Wangiverse",
 };
 
 export default function CartPage() {

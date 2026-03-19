@@ -3,12 +3,25 @@
 import { useState, useEffect, type FormEvent } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { ArrowLeft, Upload, Loader2, Video, Plus, Trash2, X, Check } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  Video,
+  Plus,
+  Trash2,
+  X,
+  Check,
+  Camera,
+  Tag,
+  Sparkles,
+  Save,
+} from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { TagInput } from "@/components/TagInput";
 import { ComboBox } from "@/components/ComboBox";
 import RichTextEditor from "@/components/RichTextEditor";
+import { formatRupiah } from "@/lib/utils";
 import type { Concentration, Split } from "@/types/database";
 
 interface VariantRow {
@@ -20,10 +33,9 @@ interface VariantRow {
 const CONCENTRATIONS: Concentration[] = ["EDP", "EDT", "Parfum", "EDC", "Cologne"];
 
 const STEPS = [
-  { num: 1, label: "Informasi Parfum" },
-  { num: 2, label: "Konfigurasi Split" },
-  { num: 3, label: "Bukti Keaslian" },
-  { num: 4, label: "Fragrance Notes" },
+  { num: 1, label: "Produk & Foto", icon: Camera },
+  { num: 2, label: "Harga & Stok", icon: Tag },
+  { num: 3, label: "Detail Tambahan", icon: Sparkles },
 ] as const;
 
 export default function EditSplitPage() {
@@ -35,7 +47,7 @@ export default function EditSplitPage() {
   const [pageLoading, setPageLoading] = useState(true);
   const [error, setError] = useState("");
   const [step, setStep] = useState(1);
-  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set([1, 2, 3, 4]));
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set([1, 2, 3]));
 
   // Form options from DB
   const [formOptions, setFormOptions] = useState<Record<string, string[]>>({});
@@ -67,13 +79,18 @@ export default function EditSplitPage() {
     { size_ml: "", price: "", stock: "" },
   ]);
 
-  // Images & Video — for edit we track existing URLs + optional new files
-  const [bottlePhoto, setBottlePhoto] = useState<File | null>(null);
-  const [bottlePhotoPreview, setBottlePhotoPreview] = useState("");
-  const [existingBottlePhoto, setExistingBottlePhoto] = useState("");
+  // Product photos (up to 4) — new files + existing URLs
+  const MAX_PRODUCT_PHOTOS = 4;
+  const [productPhotos, setProductPhotos] = useState<(File | null)[]>([]);
+  const [productPhotoPreviews, setProductPhotoPreviews] = useState<string[]>([]);
+  const [existingPhotoUrls, setExistingPhotoUrls] = useState<string[]>([]);
+
+  // Batch code photo
   const [batchCodePhoto, setBatchCodePhoto] = useState<File | null>(null);
   const [batchCodePhotoPreview, setBatchCodePhotoPreview] = useState("");
   const [existingBatchCodePhoto, setExistingBatchCodePhoto] = useState("");
+
+  // Video
   const [decantVideo, setDecantVideo] = useState<File | null>(null);
   const [decantVideoName, setDecantVideoName] = useState("");
   const [existingDecantVideo, setExistingDecantVideo] = useState("");
@@ -153,7 +170,11 @@ export default function EditSplitPage() {
       setScentClassification(s.perfume?.scent_classification ?? "");
 
       // Existing images
-      setExistingBottlePhoto(s.bottle_photo_url ?? "");
+      const photos = (s.photo_urls?.length ?? 0) > 0
+        ? s.photo_urls
+        : s.bottle_photo_url ? [s.bottle_photo_url] : [];
+      setExistingPhotoUrls(photos);
+      setProductPhotoPreviews(photos);
       setExistingBatchCodePhoto(s.batch_code_photo_url ?? "");
       setExistingDecantVideo(s.decant_video_url ?? "");
 
@@ -166,8 +187,11 @@ export default function EditSplitPage() {
   // --- Validation per step ---
   function isStepValid(s: number): boolean {
     switch (s) {
-      case 1:
-        return brand.trim().length > 0 && perfumeName.trim().length > 0;
+      case 1: {
+        const hasProductPhoto = productPhotos.filter(Boolean).length > 0 || existingPhotoUrls.length > 0;
+        const hasBatchCode = !!batchCodePhoto || !!existingBatchCodePhoto;
+        return brand.trim().length > 0 && perfumeName.trim().length > 0 && hasProductPhoto && hasBatchCode;
+      }
       case 2: {
         const hasBottle = Number(bottleSize) > 0;
         const hasVariant = variants.some(
@@ -176,9 +200,7 @@ export default function EditSplitPage() {
         return hasBottle && hasVariant && !isOverCapacity;
       }
       case 3:
-        return (!!bottlePhoto || !!existingBottlePhoto) && (!!batchCodePhoto || !!existingBatchCodePhoto);
-      case 4:
-        return true;
+        return true; // all optional
       default:
         return false;
     }
@@ -189,17 +211,15 @@ export default function EditSplitPage() {
       case 1:
         if (!brand.trim()) return "Brand wajib diisi";
         if (!perfumeName.trim()) return "Nama parfum wajib diisi";
+        if (productPhotos.filter(Boolean).length === 0 && existingPhotoUrls.length === 0) return "Minimal 1 foto produk wajib diunggah";
+        if (!batchCodePhoto && !existingBatchCodePhoto) return "Foto batch code wajib diunggah";
         return "";
       case 2:
         if (Number(bottleSize) <= 0) return "Ukuran botol wajib diisi";
         if (!variants.some((v) => Number(v.size_ml) > 0 && Number(v.price) > 0 && Number(v.stock) > 0))
-          return "Minimal 1 varian lengkap (ml, harga, stok > 0)";
+          return "Minimal 1 varian lengkap (ukuran, harga, stok > 0)";
         if (isOverCapacity)
           return `Total alokasi (${totalAllocatedMl}ml) melebihi ukuran botol (${bottleMl}ml)`;
-        return "";
-      case 3:
-        if (!bottlePhoto && !existingBottlePhoto) return "Foto botol wajib diunggah";
-        if (!batchCodePhoto && !existingBatchCodePhoto) return "Foto batch code wajib diunggah";
         return "";
       default:
         return "";
@@ -213,7 +233,7 @@ export default function EditSplitPage() {
       return;
     }
     setCompletedSteps((prev) => new Set(prev).add(step));
-    setStep((s) => Math.min(s + 1, 4));
+    setStep((s) => Math.min(s + 1, 3));
   }
 
   function handleBack() {
@@ -333,21 +353,27 @@ export default function EditSplitPage() {
     try {
       const timestamp = Date.now();
 
-      // Upload new images if provided
-      let bottlePhotoUrl = existingBottlePhoto;
-      if (bottlePhoto) {
-        const url = await uploadImage(
-          supabase,
-          bottlePhoto,
-          "perfume_images",
-          `${user.id}/bottle_${timestamp}.${bottlePhoto.name.split(".").pop()}`
-        );
-        if (!url) {
-          setError("Gagal mengunggah foto botol");
-          setLoading(false);
-          return;
+      // Build final photo_urls: existing URLs (that weren't replaced) + newly uploaded
+      const finalPhotoUrls: string[] = [];
+      for (let i = 0; i < MAX_PRODUCT_PHOTOS; i++) {
+        const newFile = productPhotos[i];
+        const existingUrl = existingPhotoUrls[i];
+        if (newFile) {
+          const url = await uploadImage(
+            supabase,
+            newFile,
+            "perfume_images",
+            `${user.id}/product_${timestamp}_${i}.${newFile.name.split(".").pop()}`
+          );
+          if (!url) {
+            setError(`Gagal mengunggah foto produk ${i + 1}`);
+            setLoading(false);
+            return;
+          }
+          finalPhotoUrls.push(url);
+        } else if (existingUrl) {
+          finalPhotoUrls.push(existingUrl);
         }
-        bottlePhotoUrl = url;
       }
 
       let batchCodePhotoUrl = existingBatchCodePhoto;
@@ -411,7 +437,7 @@ export default function EditSplitPage() {
           middleNotes,
           baseNotes,
           scentFamily,
-          bottlePhotoUrl,
+          photoUrls: finalPhotoUrls,
           batchCodePhotoUrl,
           decantVideoUrl,
         }),
@@ -437,6 +463,11 @@ export default function EditSplitPage() {
     }
   }
 
+  // --- Computed ---
+  const validVariants = variants.filter((v) => Number(v.size_ml) > 0 && Number(v.price) > 0 && Number(v.stock) > 0);
+  const minPrice = validVariants.length > 0 ? Math.min(...validVariants.map((v) => Number(v.price))) : 0;
+  const maxPrice = validVariants.length > 0 ? Math.max(...validVariants.map((v) => Number(v.price))) : 0;
+
   // --- Step Indicator ---
   function StepIndicator() {
     return (
@@ -446,6 +477,7 @@ export default function EditSplitPage() {
             const isCompleted = completedSteps.has(s.num);
             const isCurrent = step === s.num;
             const isClickable = isCompleted || isCurrent;
+            const Icon = s.icon;
 
             return (
               <div key={s.num} className={`flex items-center ${i < STEPS.length - 1 ? "flex-1" : ""}`}>
@@ -453,28 +485,36 @@ export default function EditSplitPage() {
                   type="button"
                   onClick={() => handleStepClick(s.num)}
                   disabled={!isClickable}
-                  className={`relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold transition-all ${
+                  className={`group relative flex shrink-0 flex-col items-center gap-1.5 ${isClickable ? "cursor-pointer" : ""}`}
+                >
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-semibold transition-all ${
                     isCurrent
                       ? "bg-gold-400 text-surface-400 shadow-lg shadow-gold-400/20"
                       : isCompleted
-                      ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30 hover:ring-emerald-400/50 cursor-pointer"
+                      ? "bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30 group-hover:ring-emerald-400/50"
                       : "bg-surface-300 text-gold-200/30 ring-1 ring-gold-900/20"
-                  }`}
-                >
-                  {isCompleted && !isCurrent ? <Check size={16} /> : s.num}
+                  }`}>
+                    {isCompleted && !isCurrent ? <Check size={16} /> : <Icon size={16} />}
+                  </div>
+                  <span className={`hidden text-[10px] font-medium sm:block ${
+                    isCurrent ? "text-gold-400" : isCompleted ? "text-emerald-400/70" : "text-gold-200/25"
+                  }`}>
+                    {s.label}
+                  </span>
                 </button>
+
                 {i < STEPS.length - 1 && (
-                  <div
-                    className={`mx-2 h-px flex-1 transition-colors ${
-                      completedSteps.has(s.num) ? "bg-emerald-500/30" : "bg-gold-900/20"
-                    }`}
-                  />
+                  <div className={`mx-3 mb-5 h-px flex-1 transition-colors sm:mb-6 ${
+                    completedSteps.has(s.num) ? "bg-emerald-500/30" : "bg-gold-900/20"
+                  }`} />
                 )}
               </div>
             );
           })}
         </div>
-        <p className="mt-5 text-center text-sm font-medium text-gold-400">
+
+        {/* Mobile step label */}
+        <p className="mt-4 text-center text-sm font-medium text-gold-400 sm:hidden">
           {STEPS[step - 1].label}
         </p>
       </div>
@@ -489,6 +529,8 @@ export default function EditSplitPage() {
     );
   }
 
+  const inputClass = "input-dark mt-1";
+
   return (
     <div className="mx-auto max-w-3xl px-4 pb-8 pt-20 sm:px-6 md:pt-8">
       <Link
@@ -498,20 +540,26 @@ export default function EditSplitPage() {
         <ArrowLeft size={16} /> Kembali ke Detail
       </Link>
 
-      <h1 className="font-display text-3xl font-bold text-gold-100">Edit Split</h1>
+      <h1 className="font-display text-3xl font-bold text-gold-100">Edit Listing</h1>
       <p className="mt-1 text-sm text-gold-200/40">
-        Perbarui informasi listing split kamu.
+        Perbarui informasi listing decant kamu
       </p>
 
       <div className="mt-8">
         <StepIndicator />
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Step 1: Informasi Parfum */}
+
+          {/* ═══ STEP 1: Produk & Foto ═══ */}
           {step === 1 && (
-            <section>
-              <h2 className="font-display text-lg font-semibold text-gold-100">Informasi Parfum</h2>
-              <div className="mt-4 space-y-4">
+            <section className="space-y-6">
+              {/* Essential info */}
+              <div>
+                <h2 className="font-display text-lg font-semibold text-gold-100">Informasi Produk</h2>
+                <p className="mt-0.5 text-xs text-gold-200/30">Data utama yang akan dilihat pembeli</p>
+              </div>
+
+              <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Brand *</label>
                   <ComboBox
@@ -529,24 +577,12 @@ export default function EditSplitPage() {
                     value={perfumeName}
                     onChange={(e) => setPerfumeName(e.target.value)}
                     placeholder="contoh: Sauvage"
-                    className="input-dark mt-1"
+                    className={inputClass}
                   />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gold-200/60">Varian</label>
-                  <TagInput
-                    tags={perfumeVariant}
-                    onChange={setPerfumeVariant}
-                    placeholder="Ketik lalu Enter atau koma — contoh: LILAC, CHROMA"
-                    className="mt-1"
-                  />
-                  <p className="mt-1 text-[11px] text-gold-200/25">
-                    Varian khusus brand, jika ada. Tekan Enter atau koma untuk menambah.
-                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Konsentrasi</label>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+                  <div className="mt-2 flex flex-wrap gap-2">
                     {CONCENTRATIONS.map((c) => (
                       <button
                         key={c}
@@ -563,55 +599,162 @@ export default function EditSplitPage() {
                     ))}
                   </div>
                 </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className="block text-sm font-medium text-gold-200/60">Tipe Brand</label>
-                    <ComboBox
-                      value={brandType}
-                      onChange={setBrandType}
-                      options={formOptions.brand_type ?? []}
-                      placeholder="Designer, Niche, dll"
-                      className="mt-1"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gold-200/60">Gender</label>
-                    <ComboBox
-                      value={gender}
-                      onChange={setGender}
-                      options={formOptions.gender ?? []}
-                      placeholder="Men, Women, Unisex"
-                      className="mt-1"
-                    />
-                  </div>
-                </div>
                 <div>
-                  <label className="block text-sm font-medium text-gold-200/60">Klasifikasi Aroma</label>
-                  <ComboBox
-                    value={scentClassification}
-                    onChange={setScentClassification}
-                    options={formOptions.scent_classification ?? []}
-                    placeholder="Cari klasifikasi aroma..."
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gold-200/60">Deskripsi</label>
+                  <label className="block text-sm font-medium text-gold-200/60">Deskripsi Produk</label>
+                  <p className="mb-1 text-[11px] text-gold-200/25">Jelaskan kenapa pembeli harus beli dari kamu</p>
                   <RichTextEditor
                     value={description}
                     onChange={setDescription}
-                    placeholder="Deskripsi parfum"
+                    placeholder="Contoh: Decant asli dari botol original, diambil dengan syringe steril..."
                   />
                 </div>
+              </div>
+
+              {/* Product Photos */}
+              <div className="pt-2">
+                <h2 className="font-display text-lg font-semibold text-gold-100">Foto Produk & Bukti Keaslian</h2>
+                <p className="mt-0.5 text-xs text-gold-200/30">Foto yang jelas meningkatkan kepercayaan pembeli</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gold-200/60">Foto Produk * <span className="font-normal text-gold-200/30">({productPhotoPreviews.filter(Boolean).length}/{MAX_PRODUCT_PHOTOS})</span></label>
+                <p className="mt-0.5 text-[11px] text-gold-200/25">Upload 1–4 foto produk. Foto pertama akan jadi cover utama.</p>
+                <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {Array.from({ length: MAX_PRODUCT_PHOTOS }).map((_, idx) => {
+                    const preview = productPhotoPreviews[idx];
+                    return (
+                      <div key={idx} className="relative">
+                        <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gold-900/40 bg-surface-200/50 transition-colors hover:border-gold-700/50 hover:bg-surface-200 overflow-hidden aspect-[4/5]">
+                          {preview ? (
+                            <div className="relative h-full w-full">
+                              <Image src={preview} alt={`Foto ${idx + 1}`} fill className="object-cover" />
+                              <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/60 to-transparent pb-2">
+                                <span className="text-[10px] font-medium text-white/80">{idx === 0 ? "Cover" : `Foto ${idx + 1}`}</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col items-center gap-1.5 p-4">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gold-400/10">
+                                <Camera size={16} className="text-gold-400/50" />
+                              </div>
+                              <p className="text-[10px] font-medium text-gold-200/50">{idx === 0 ? "Cover *" : `Foto ${idx + 1}`}</p>
+                            </div>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] ?? null;
+                              if (!file) return;
+                              if (!ALLOWED_IMAGE_TYPES.includes(file.type)) { setError("Format gambar harus JPG, PNG, atau WebP"); return; }
+                              if (file.size > MAX_IMAGE_SIZE) { setError(`Ukuran gambar maksimal 5MB. File ini ${formatFileSize(file.size)}`); return; }
+                              setError("");
+                              setProductPhotos(prev => { const next = [...prev]; next[idx] = file; return next; });
+                              setProductPhotoPreviews(prev => { const next = [...prev]; next[idx] = URL.createObjectURL(file); return next; });
+                              // Clear existing URL at this index since it's being replaced
+                              setExistingPhotoUrls(prev => { const next = [...prev]; next[idx] = ""; return next; });
+                            }}
+                          />
+                        </label>
+                        {preview && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductPhotos(prev => { const next = [...prev]; next.splice(idx, 1); return next; });
+                              setProductPhotoPreviews(prev => { const next = [...prev]; next.splice(idx, 1); return next; });
+                              setExistingPhotoUrls(prev => { const next = [...prev]; next.splice(idx, 1); return next; });
+                            }}
+                            className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-red-500/90 text-white shadow-lg transition-colors hover:bg-red-600"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gold-200/60">Foto Batch Code *</label>
+                <label className="mt-1 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gold-900/40 bg-surface-200/50 transition-colors hover:border-gold-700/50 hover:bg-surface-200 overflow-hidden aspect-[3/2] max-w-xs">
+                  {(batchCodePhotoPreview || existingBatchCodePhoto) ? (
+                    <div className="relative h-full w-full">
+                      <Image src={batchCodePhotoPreview || existingBatchCodePhoto} alt="Batch Code" fill className="object-cover" />
+                      <div className="absolute inset-0 flex items-end justify-center bg-gradient-to-t from-black/60 to-transparent pb-2">
+                        <span className="text-[10px] font-medium text-white/80">Klik untuk ganti</span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-1.5 p-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gold-400/10">
+                        <Camera size={16} className="text-gold-400/50" />
+                      </div>
+                      <p className="text-[10px] font-medium text-gold-200/50">Upload batch code</p>
+                      <p className="text-[9px] text-gold-200/25">JPG, PNG, WebP · Maks 5MB</p>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                    onChange={(e) =>
+                      handleImageChange(e.target.files?.[0] ?? null, setBatchCodePhoto, setBatchCodePhotoPreview)
+                    }
+                  />
+                </label>
+              </div>
+
+              {/* Video Decant (optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gold-200/60">Video Decant (opsional)</label>
+                <label className="mt-1 flex cursor-pointer items-center justify-center gap-3 rounded-xl border border-dashed border-gold-900/40 bg-surface-200/50 p-4 transition-colors hover:border-gold-700/50 hover:bg-surface-200">
+                  {decantVideoName ? (
+                    <div className="flex items-center gap-3">
+                      <Video size={18} className="text-gold-400" />
+                      <div>
+                        <p className="text-sm font-medium text-gold-200">{decantVideoName}</p>
+                        <p className="text-xs text-gold-200/30">{decantVideo && formatFileSize(decantVideo.size)}</p>
+                      </div>
+                    </div>
+                  ) : existingDecantVideo ? (
+                    <div className="flex items-center gap-3">
+                      <Video size={18} className="text-gold-400" />
+                      <div>
+                        <p className="text-xs font-medium text-gold-200/50">Video sudah ada — klik untuk ganti</p>
+                        <p className="text-[10px] text-gold-200/25">MP4, MOV, WebM · Maks 50MB</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-3">
+                      <Video size={18} className="text-gold-200/30" />
+                      <div>
+                        <p className="text-xs font-medium text-gold-200/50">Upload video proses decant</p>
+                        <p className="text-[10px] text-gold-200/25">MP4, MOV, WebM · Maks 50MB</p>
+                      </div>
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/webm"
+                    className="hidden"
+                    onChange={(e) => handleVideoChange(e.target.files?.[0] ?? null)}
+                  />
+                </label>
               </div>
             </section>
           )}
 
-          {/* Step 2: Konfigurasi Split */}
+          {/* ═══ STEP 2: Harga & Stok ═══ */}
           {step === 2 && (
-            <section>
-              <h2 className="font-display text-lg font-semibold text-gold-100">Konfigurasi Split</h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <section className="space-y-6">
+              <div>
+                <h2 className="font-display text-lg font-semibold text-gold-100">Harga & Stok</h2>
+                <p className="mt-0.5 text-xs text-gold-200/30">Atur ukuran botol, varian decant, dan ketersediaan</p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Ukuran Botol (ml) *</label>
                   <input
@@ -619,9 +762,10 @@ export default function EditSplitPage() {
                     min="1"
                     value={bottleSize}
                     onChange={(e) => setBottleSize(e.target.value)}
-                    placeholder="100"
-                    className="input-dark mt-1"
+                    placeholder="contoh: 100"
+                    className={inputClass}
                   />
+                  <p className="mt-1 text-[11px] text-gold-200/25">Total isi botol full</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gold-200/60">Batch Code</label>
@@ -629,20 +773,31 @@ export default function EditSplitPage() {
                     type="text"
                     value={batchCode}
                     onChange={(e) => setBatchCode(e.target.value)}
-                    placeholder="Opsional"
-                    className="input-dark mt-1"
+                    placeholder="Opsional, contoh: 3A01"
+                    className={inputClass}
                   />
+                  <p className="mt-1 text-[11px] text-gold-200/25">Nomor batch produksi botol</p>
                 </div>
               </div>
 
-              <div className="mt-6">
-                <label className="block text-sm font-medium text-gold-200/60">Varian Ukuran *</label>
+              {/* Variant Rows */}
+              <div>
+                <label className="block text-sm font-medium text-gold-200/60">Ukuran Decant yang Dijual *</label>
                 <p className="mt-0.5 text-[11px] text-gold-200/25">
-                  Tambahkan ukuran decant yang tersedia beserta harga dan stok
+                  Tambahkan ukuran decant, harga per botol, dan jumlah stok
                 </p>
-                <div className="mt-3 space-y-2">
+
+                {/* Header labels for desktop */}
+                <div className="mt-3 hidden items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-gold-200/30 sm:flex">
+                  <span className="flex-1">Ukuran (ml)</span>
+                  <span className="flex-1">Harga (Rp)</span>
+                  <span className="w-20">Stok</span>
+                  <span className="w-9" />
+                </div>
+
+                <div className="mt-2 space-y-2 sm:mt-1">
                   {variants.map((variant, index) => (
-                    <div key={index} className="flex flex-wrap items-center gap-2 rounded-lg border border-gold-900/10 p-2 sm:flex-nowrap sm:border-0 sm:p-0">
+                    <div key={index} className="flex flex-wrap items-center gap-2 rounded-xl border border-gold-900/10 bg-surface-200/30 p-2.5 sm:flex-nowrap sm:rounded-lg sm:border-0 sm:bg-transparent sm:p-0">
                       <div className="w-[calc(50%-4px)] sm:flex-1">
                         <input
                           type="number"
@@ -659,7 +814,7 @@ export default function EditSplitPage() {
                           min="1000"
                           value={variant.price}
                           onChange={(e) => updateVariant(index, "price", e.target.value)}
-                          placeholder="Harga (Rp)"
+                          placeholder="Harga"
                           className="input-dark !py-2.5 text-sm"
                         />
                       </div>
@@ -693,33 +848,36 @@ export default function EditSplitPage() {
                 </button>
               </div>
 
-              <label className="mt-4 flex cursor-pointer items-center gap-3 rounded-xl border border-gold-900/20 bg-surface-200/50 p-4 transition-colors hover:bg-surface-200">
-                <div className="relative">
-                  <input
-                    type="checkbox"
-                    checked={isReadyStock}
-                    onChange={(e) => setIsReadyStock(e.target.checked)}
-                    className="peer sr-only"
-                  />
-                  <div className="h-6 w-11 rounded-full bg-surface-400 transition-colors peer-checked:bg-gold-500" />
-                  <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-gold-100 transition-transform peer-checked:translate-x-5" />
+              {/* Price preview */}
+              {validVariants.length > 0 && (
+                <div className="rounded-xl border border-gold-700/20 bg-gold-400/5 p-4">
+                  <p className="text-xs font-medium text-gold-200/30 uppercase tracking-wider">Preview Harga</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {validVariants.map((v, i) => (
+                      <span key={i} className="rounded-lg bg-surface-300/60 px-3 py-1.5 text-xs text-gold-100">
+                        {v.size_ml}ml — <span className="font-semibold text-gold-400">{formatRupiah(Number(v.price))}</span>
+                        <span className="text-gold-200/30"> (×{v.stock})</span>
+                      </span>
+                    ))}
+                  </div>
+                  {minPrice !== maxPrice && (
+                    <p className="mt-2 text-xs text-gold-200/40">
+                      Range: {formatRupiah(minPrice)} — {formatRupiah(maxPrice)}
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <p className="text-sm font-medium text-gold-100">Ready Stock</p>
-                  <p className="text-[11px] text-gold-200/40">Centang jika Anda sudah memiliki decant siap kirim</p>
-                </div>
-              </label>
+              )}
 
               {/* Capacity indicator */}
               {(totalStock > 0 || totalAllocatedMl > 0) && (
-                <div className={`mt-4 rounded-xl border p-4 ${
+                <div className={`rounded-xl border p-4 ${
                   isOverCapacity
                     ? "border-red-500/30 bg-red-500/5"
                     : "border-gold-700/20 bg-gold-400/5"
                 }`}>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-gold-300">
-                      <span className="font-semibold text-gold-400">{totalStock} total stok</span> dari{" "}
+                      <span className="font-semibold text-gold-400">{totalStock} stok</span> dari{" "}
                       {variants.filter((v) => v.size_ml).length} varian
                     </span>
                     <span className={`font-semibold ${isOverCapacity ? "text-red-400" : "text-gold-400"}`}>
@@ -738,167 +896,155 @@ export default function EditSplitPage() {
                       </div>
                       {isOverCapacity && (
                         <p className="mt-1.5 text-xs text-red-400">
-                          Melebihi kapasitas botol sebanyak {totalAllocatedMl - bottleMl}ml. Kurangi stok atau ukuran varian.
+                          Melebihi kapasitas botol sebanyak {totalAllocatedMl - bottleMl}ml
                         </p>
                       )}
                     </div>
                   )}
                 </div>
               )}
-            </section>
-          )}
 
-          {/* Step 3: Bukti Keaslian */}
-          {step === 3 && (
-            <section>
-              <h2 className="font-display text-lg font-semibold text-gold-100">Bukti Keaslian</h2>
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-sm font-medium text-gold-200/60">Foto Botol *</label>
-                  <label className="mt-1 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gold-900/40 bg-surface-200/50 p-6 transition-colors hover:border-gold-700/50 hover:bg-surface-200">
-                    {bottlePhotoPreview || existingBottlePhoto ? (
-                      <Image
-                        src={bottlePhotoPreview || existingBottlePhoto}
-                        alt="Preview"
-                        width={120}
-                        height={120}
-                        className="rounded-lg object-cover"
-                      />
-                    ) : (
-                      <>
-                        <Upload size={22} className="text-gold-200/30" />
-                        <p className="mt-2 text-xs text-gold-200/40">Upload foto botol</p>
-                      </>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={(e) =>
-                        handleImageChange(
-                          e.target.files?.[0] ?? null,
-                          setBottlePhoto,
-                          setBottlePhotoPreview
-                        )
-                      }
-                    />
-                  </label>
-                  {(bottlePhotoPreview || existingBottlePhoto) && (
-                    <p className="mt-1 text-[11px] text-gold-200/25">Klik untuk ganti foto</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gold-200/60">Foto Batch Code *</label>
-                  <label className="mt-1 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gold-900/40 bg-surface-200/50 p-6 transition-colors hover:border-gold-700/50 hover:bg-surface-200">
-                    {batchCodePhotoPreview || existingBatchCodePhoto ? (
-                      <Image
-                        src={batchCodePhotoPreview || existingBatchCodePhoto}
-                        alt="Preview"
-                        width={120}
-                        height={120}
-                        className="rounded-lg object-cover"
-                      />
-                    ) : (
-                      <>
-                        <Upload size={22} className="text-gold-200/30" />
-                        <p className="mt-2 text-xs text-gold-200/40">Upload batch code</p>
-                      </>
-                    )}
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={(e) =>
-                        handleImageChange(
-                          e.target.files?.[0] ?? null,
-                          setBatchCodePhoto,
-                          setBatchCodePhotoPreview
-                        )
-                      }
-                    />
-                  </label>
-                  {(batchCodePhotoPreview || existingBatchCodePhoto) && (
-                    <p className="mt-1 text-[11px] text-gold-200/25">Klik untuk ganti foto</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4">
-                <label className="block text-sm font-medium text-gold-200/60">Video Decant (opsional)</label>
-                <label className="mt-1 flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-gold-900/40 bg-surface-200/50 p-6 transition-colors hover:border-gold-700/50 hover:bg-surface-200">
-                  {decantVideoName ? (
-                    <div className="text-center">
-                      <Video size={22} className="mx-auto text-gold-400" />
-                      <p className="mt-2 text-sm font-medium text-gold-200">{decantVideoName}</p>
-                      <p className="text-xs text-gold-200/30">{decantVideo && formatFileSize(decantVideo.size)}</p>
-                    </div>
-                  ) : existingDecantVideo ? (
-                    <div className="text-center">
-                      <Video size={22} className="mx-auto text-gold-400" />
-                      <p className="mt-2 text-xs text-gold-200/40">Video sudah ada — klik untuk ganti</p>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload size={22} className="text-gold-200/30" />
-                      <p className="mt-2 text-xs text-gold-200/40">Upload video bukti decant</p>
-                    </>
-                  )}
+              {/* Ready Stock Toggle */}
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-gold-900/20 bg-surface-200/50 p-4 transition-colors hover:bg-surface-200">
+                <div className="relative">
                   <input
-                    type="file"
-                    accept="video/mp4,video/quicktime,video/webm"
-                    className="hidden"
-                    onChange={(e) => handleVideoChange(e.target.files?.[0] ?? null)}
+                    type="checkbox"
+                    checked={isReadyStock}
+                    onChange={(e) => setIsReadyStock(e.target.checked)}
+                    className="peer sr-only"
                   />
-                </label>
-                <p className="mt-1 text-[11px] text-gold-200/25">MP4, MOV, WebM. Maks 50MB</p>
-              </div>
+                  <div className="h-6 w-11 rounded-full bg-surface-400 transition-colors peer-checked:bg-gold-500" />
+                  <div className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-gold-100 transition-transform peer-checked:translate-x-5" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gold-100">Ready Stock</p>
+                  <p className="text-[11px] text-gold-200/40">Decant sudah jadi, siap langsung kirim ke pembeli</p>
+                </div>
+              </label>
             </section>
           )}
 
-          {/* Step 4: Fragrance Notes */}
-          {step === 4 && (
-            <section>
-              <h2 className="font-display text-lg font-semibold text-gold-100">Fragrance Notes</h2>
-              <p className="mt-1 text-xs text-gold-200/30">Opsional — bantu buyer mengenal profil aroma</p>
+          {/* ═══ STEP 3: Detail Tambahan (Optional) ═══ */}
+          {step === 3 && (
+            <section className="space-y-6">
+              <div>
+                <h2 className="font-display text-lg font-semibold text-gold-100">Detail Tambahan</h2>
+                <p className="mt-0.5 text-xs text-gold-200/30">
+                  Opsional — informasi ini membantu pembeli menemukan dan memilih produk kamu
+                </p>
+              </div>
 
-              <div className="mt-4 space-y-4">
-                {(["top", "middle", "base"] as const).map((type) => {
-                  const notes = type === "top" ? topNotes : type === "middle" ? middleNotes : baseNotes;
-                  const label = type === "top" ? "Top Notes" : type === "middle" ? "Middle Notes" : "Base Notes";
-                  const colors = type === "top" ? "bg-amber-500/15 text-amber-400 ring-amber-500/20" : type === "middle" ? "bg-rose-500/15 text-rose-400 ring-rose-500/20" : "bg-emerald-500/15 text-emerald-400 ring-emerald-500/20";
-                  return (
-                    <div key={type}>
-                      <label className="block text-sm font-medium text-gold-200/60">{label}</label>
-                      <div className="mt-1.5 flex flex-wrap gap-1.5">
-                        {notes.map((note, i) => (
-                          <span key={i} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${colors}`}>
-                            {note}
-                            <button type="button" onClick={() => removeNote(type, i)} className="hover:opacity-70">
-                              <X size={10} />
-                            </button>
-                          </span>
-                        ))}
+              {/* Variant names */}
+              <div>
+                <label className="block text-sm font-medium text-gold-200/60">Varian Parfum</label>
+                <TagInput
+                  tags={perfumeVariant}
+                  onChange={setPerfumeVariant}
+                  placeholder="Contoh: LILAC, CHROMA — tekan Enter"
+                  className="mt-1"
+                />
+                <p className="mt-1 text-[11px] text-gold-200/25">
+                  Jika parfum ini punya beberapa varian (misal warna/edisi)
+                </p>
+              </div>
+
+              {/* Categorization */}
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Gender</label>
+                  <ComboBox
+                    value={gender}
+                    onChange={setGender}
+                    options={formOptions.gender ?? []}
+                    placeholder="Pilih..."
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Tipe Brand</label>
+                  <ComboBox
+                    value={brandType}
+                    onChange={setBrandType}
+                    options={formOptions.brand_type ?? []}
+                    placeholder="Pilih..."
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gold-200/60">Klasifikasi Aroma</label>
+                  <ComboBox
+                    value={scentClassification}
+                    onChange={setScentClassification}
+                    options={formOptions.scent_classification ?? []}
+                    placeholder="Pilih..."
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Fragrance Notes */}
+              <div className="rounded-xl border border-gold-900/20 bg-surface-200/30 p-5">
+                <h3 className="text-sm font-medium text-gold-100">Fragrance Notes</h3>
+                <p className="mt-0.5 text-[11px] text-gold-200/30">
+                  Bantu pembeli mengenal profil aroma parfum ini
+                </p>
+
+                <div className="mt-4 space-y-4">
+                  {(["top", "middle", "base"] as const).map((type) => {
+                    const notes = type === "top" ? topNotes : type === "middle" ? middleNotes : baseNotes;
+                    const label = type === "top" ? "Top Notes" : type === "middle" ? "Middle Notes" : "Base Notes";
+                    const hint = type === "top" ? "Aroma pertama (15-30 menit)" : type === "middle" ? "Aroma utama (2-4 jam)" : "Aroma terakhir (4-8+ jam)";
+                    const colors = type === "top" ? "bg-amber-500/15 text-amber-400 ring-amber-500/20" : type === "middle" ? "bg-rose-500/15 text-rose-400 ring-rose-500/20" : "bg-emerald-500/15 text-emerald-400 ring-emerald-500/20";
+                    return (
+                      <div key={type}>
+                        <div className="flex items-baseline justify-between">
+                          <label className="text-sm font-medium text-gold-200/60">{label}</label>
+                          <span className="text-[10px] text-gold-200/20">{hint}</span>
+                        </div>
+                        {notes.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {notes.map((note, i) => (
+                              <span key={i} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset ${colors}`}>
+                                {note}
+                                <button type="button" onClick={() => removeNote(type, i)} className="hover:opacity-70">
+                                  <X size={10} />
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <div className="mt-1.5 flex gap-2">
+                          <input
+                            type="text"
+                            value={noteInput[type]}
+                            onChange={(e) => setNoteInput((prev) => ({ ...prev, [type]: e.target.value }))}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNote(type); } }}
+                            placeholder={`Tambah ${label.toLowerCase()}...`}
+                            className="input-dark flex-1 !py-2 text-xs"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => addNote(type)}
+                            className="rounded-lg bg-surface-200 px-3 text-xs text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
+                          >
+                            +
+                          </button>
+                        </div>
                       </div>
-                      <div className="mt-1.5 flex gap-2">
-                        <input
-                          type="text"
-                          value={noteInput[type]}
-                          onChange={(e) => setNoteInput((prev) => ({ ...prev, [type]: e.target.value }))}
-                          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addNote(type); } }}
-                          placeholder={`Tambah ${label.toLowerCase()}...`}
-                          className="input-dark flex-1 !py-2 text-xs"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => addNote(type)}
-                          className="rounded-lg bg-surface-200 px-3 text-xs text-gold-200/50 ring-1 ring-gold-900/30 hover:ring-gold-700/40"
-                        >
-                          +
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+
+                <div className="mt-4">
+                  <label className="block text-sm font-medium text-gold-200/60">Scent Family</label>
+                  <input
+                    type="text"
+                    value={scentFamily}
+                    onChange={(e) => setScentFamily(e.target.value)}
+                    placeholder="contoh: Woody, Floral, Oriental..."
+                    className="input-dark mt-1 !py-2 text-xs"
+                  />
+                </div>
               </div>
             </section>
           )}
@@ -924,7 +1070,7 @@ export default function EditSplitPage() {
 
             <div className="flex-1" />
 
-            {step < 4 && (
+            {step < 3 && (
               <button
                 type="button"
                 onClick={handleNext}
@@ -934,7 +1080,7 @@ export default function EditSplitPage() {
               </button>
             )}
 
-            {step === 4 && (
+            {step === 3 && (
               <button
                 type="button"
                 onClick={() => handleSubmit()}
@@ -942,6 +1088,7 @@ export default function EditSplitPage() {
                 className="btn-gold flex items-center gap-2 rounded-xl px-6 py-2.5 text-sm font-semibold text-surface-400 disabled:opacity-50"
               >
                 {loading && <Loader2 size={16} className="animate-spin" />}
+                <Save size={16} />
                 Simpan Perubahan
               </button>
             )}

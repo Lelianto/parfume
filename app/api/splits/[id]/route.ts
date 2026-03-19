@@ -67,6 +67,7 @@ export async function PATCH(
       brandType,
       gender,
       scentClassification,
+      photoUrls,
       bottlePhotoUrl,
       batchCodePhotoUrl,
       decantVideoUrl,
@@ -103,7 +104,12 @@ export async function PATCH(
     if (batchCode !== undefined) splitUpdate.batch_code = batchCode || null;
     if (typeof isReadyStock === "boolean") splitUpdate.is_ready_stock = isReadyStock;
     if (description !== undefined) splitUpdate.description = description || null;
-    if (bottlePhotoUrl !== undefined) splitUpdate.bottle_photo_url = bottlePhotoUrl || null;
+    if (photoUrls !== undefined) {
+      splitUpdate.photo_urls = photoUrls ?? [];
+      splitUpdate.bottle_photo_url = photoUrls?.[0] || null;
+    } else if (bottlePhotoUrl !== undefined) {
+      splitUpdate.bottle_photo_url = bottlePhotoUrl || null;
+    }
     if (batchCodePhotoUrl !== undefined) splitUpdate.batch_code_photo_url = batchCodePhotoUrl || null;
     if (decantVideoUrl !== undefined) splitUpdate.decant_video_url = decantVideoUrl || null;
 
