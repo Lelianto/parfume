@@ -27,6 +27,7 @@ import {
   Copy,
   Check,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 
 interface ShippingCostOption {
@@ -138,6 +139,14 @@ export function OrderDetailClient({
   // Determine courier for in-app tracking
   const courierCode = order.shipping_courier || (order.shipping_receipt ? detectCourier(order.shipping_receipt) : null);
   const canTrackInApp = isInAppTrackingAvailable(courierCode);
+
+  // Auto-fetch tracking when shipped
+  useEffect(() => {
+    if ((order.status === "shipped" || order.status === "completed") && canTrackInApp && order.shipping_receipt && !trackingData) {
+      handleCekResi();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order.status, order.shipping_receipt]);
 
   async function handleCekResi() {
     if (!order.shipping_receipt) return;
@@ -586,79 +595,131 @@ export function OrderDetailClient({
       {/* SHIPPED */}
       {order.status === "shipped" && (
         <div className="space-y-4">
-          <div className="rounded-xl border border-violet-500/20 bg-violet-500/5 p-4">
-            <div className="flex items-center gap-2 text-violet-300">
-              <Truck size={18} />
-              <p className="text-sm font-semibold">Pesanan sedang dikirim</p>
-            </div>
-            {order.shipping_receipt && (
-              <div className="mt-3 rounded-lg bg-surface-300/60 px-4 py-3">
-                <p className="text-xs text-gold-200/40">Nomor Resi</p>
-                <div className="mt-1 flex items-center justify-between gap-2">
-                  <p className="font-mono text-base font-bold text-gold-100">
-                    {order.shipping_receipt}
-                  </p>
-                  <CopyButton text={order.shipping_receipt} />
+          {/* ── Shipping Info Card (Shopee-style) ── */}
+          <div className="rounded-2xl border border-emerald-500/15 bg-gradient-to-b from-emerald-500/5 to-transparent overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-emerald-500/10 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500/15">
+                  <Truck size={16} className="text-emerald-400" />
                 </div>
-                {trackingInfo ? (
-                  <a
-                    href={trackingInfo.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 flex items-center gap-1.5 text-xs font-medium text-gold-400 hover:underline"
-                  >
-                    <ExternalLink size={12} />
-                    Lacak di {trackingInfo.courierName}
-                  </a>
-                ) : (
-                  <a
-                    href={`https://cekresi.com/?noresi=${order.shipping_receipt}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 flex items-center gap-1.5 text-xs font-medium text-gold-400 hover:underline"
-                  >
-                    <ExternalLink size={12} />
-                    Lacak Pengiriman
-                  </a>
-                )}
+                <div>
+                  <p className="text-sm font-semibold text-emerald-300">Sedang Dikirim</p>
+                  {order.shipping_service && (
+                    <p className="text-[11px] text-gold-200/35">{order.shipping_service}</p>
+                  )}
+                </div>
+              </div>
+              {order.shipped_at && (
+                <p className="text-[10px] text-gold-200/25">
+                  {new Date(order.shipped_at).toLocaleDateString("id-ID", {
+                    day: "numeric",
+                    month: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </p>
+              )}
+            </div>
+
+            {/* AWB / Resi */}
+            {order.shipping_receipt && (
+              <div className="px-4 py-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-gold-200/30">No. Resi</p>
+                    <p className="mt-0.5 font-mono text-base font-bold tracking-wider text-gold-100">
+                      {order.shipping_receipt}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <CopyButton text={order.shipping_receipt} />
+                    {trackingInfo ? (
+                      <a
+                        href={trackingInfo.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gold-400 transition-colors hover:bg-gold-400/10"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    ) : (
+                      <a
+                        href={`https://cekresi.com/?noresi=${order.shipping_receipt}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-gold-400 transition-colors hover:bg-gold-400/10"
+                      >
+                        <ExternalLink size={12} />
+                      </a>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
           </div>
 
-          {/* In-app tracking */}
+          {/* ── In-app Tracking (auto-loaded) ── */}
           {canTrackInApp && order.shipping_receipt && (
             <div className="space-y-3">
-              {!trackingData && (
-                <button
-                  onClick={handleCekResi}
-                  disabled={trackingLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
-                >
-                  {trackingLoading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Truck size={16} />
-                  )}
-                  {trackingLoading ? "Memuat..." : "Cek Resi"}
-                </button>
+              {trackingLoading && !trackingData && (
+                <div className="flex items-center justify-center gap-2 rounded-2xl border border-gold-900/15 bg-surface-200/50 py-8 text-sm text-gold-200/40">
+                  <Loader2 size={16} className="animate-spin text-gold-400" />
+                  Memuat info pengiriman...
+                </div>
               )}
               {trackingError && (
-                <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
-                  {trackingError}
+                <div className="space-y-2">
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
+                    {trackingError}
+                  </div>
+                  <button
+                    onClick={handleCekResi}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-2.5 text-xs font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+                  >
+                    <RefreshCw size={12} /> Coba Lagi
+                  </button>
                 </div>
               )}
               {trackingData && (
-                <div className="rounded-2xl border border-gold-900/20 bg-surface-200/50 p-5">
+                <div className="rounded-2xl border border-gold-900/15 bg-surface-200/50 p-5">
                   <TrackingTimeline
                     result={trackingData.data}
                     fetchedAt={trackingData.fetched_at}
                     cached={trackingData.cached}
                   />
+                  {/* Refresh button */}
+                  <button
+                    onClick={handleCekResi}
+                    disabled={trackingLoading}
+                    className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg bg-gold-400/5 py-2 text-[11px] font-medium text-gold-400/60 transition-colors hover:bg-gold-400/10"
+                  >
+                    {trackingLoading ? (
+                      <Loader2 size={11} className="animate-spin" />
+                    ) : (
+                      <RefreshCw size={11} />
+                    )}
+                    Perbarui Status
+                  </button>
                 </div>
               )}
             </div>
           )}
 
+          {/* Not trackable in-app — show external link */}
+          {!canTrackInApp && order.shipping_receipt && (
+            <a
+              href={trackingInfo?.url || `https://cekresi.com/?noresi=${order.shipping_receipt}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+            >
+              <ExternalLink size={16} />
+              Lacak di {trackingInfo?.courierName || "Website Kurir"}
+            </a>
+          )}
+
+          {/* Confirm received */}
           <button
             onClick={handleConfirmReceived}
             disabled={confirming}
@@ -690,22 +751,14 @@ export function OrderDetailClient({
             </div>
           </div>
 
-          {/* In-app tracking for completed orders */}
+          {/* In-app tracking for completed orders (auto-loaded) */}
           {canTrackInApp && order.shipping_receipt && (
-            <>
-              {!trackingData && (
-                <button
-                  onClick={handleCekResi}
-                  disabled={trackingLoading}
-                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
-                >
-                  {trackingLoading ? (
-                    <Loader2 size={16} className="animate-spin" />
-                  ) : (
-                    <Truck size={16} />
-                  )}
-                  {trackingLoading ? "Memuat..." : "Cek Resi"}
-                </button>
+            <div className="space-y-2">
+              {trackingLoading && !trackingData && (
+                <div className="flex items-center justify-center gap-2 rounded-2xl border border-gold-900/15 bg-surface-200/50 py-6 text-sm text-gold-200/40">
+                  <Loader2 size={14} className="animate-spin text-gold-400" />
+                  Memuat info pengiriman...
+                </div>
               )}
               {trackingError && (
                 <div className="rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-400">
@@ -713,7 +766,7 @@ export function OrderDetailClient({
                 </div>
               )}
               {trackingData && (
-                <div className="rounded-2xl border border-gold-900/20 bg-surface-200/50 p-5">
+                <div className="rounded-2xl border border-gold-900/15 bg-surface-200/50 p-5">
                   <TrackingTimeline
                     result={trackingData.data}
                     fetchedAt={trackingData.fetched_at}
@@ -721,15 +774,24 @@ export function OrderDetailClient({
                   />
                 </div>
               )}
-            </>
+            </div>
           )}
 
-          <Link
-            href={`/split/${order.split_id}`}
-            className="flex items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
-          >
-            <Star size={15} /> Tulis Review
-          </Link>
+          {/* Action buttons */}
+          <div className="flex gap-2">
+            <Link
+              href={`/split/${order.split_id}`}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+            >
+              <Star size={15} /> Tulis Review
+            </Link>
+            <Link
+              href={`/split/${order.split_id}`}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 py-3.5 text-sm font-medium text-emerald-400 transition-colors hover:bg-emerald-500/10"
+            >
+              <RefreshCw size={15} /> Pesan Lagi
+            </Link>
+          </div>
         </div>
       )}
 
@@ -756,14 +818,22 @@ export function OrderDetailClient({
 
       {/* CANCELLED (by buyer/seller/expired) */}
       {order.status === "cancelled" && (
-        <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
-          <XCircle size={20} className="mt-0.5 flex-shrink-0 text-red-400" />
-          <div>
-            <p className="text-sm font-semibold text-red-300">Pesanan Dibatalkan</p>
-            <p className="mt-0.5 text-xs text-gold-200/40">
-              Order ini dibatalkan karena tidak melakukan pembayaran dalam batas waktu yang ditentukan.
-            </p>
+        <div className="space-y-3">
+          <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4">
+            <XCircle size={20} className="mt-0.5 flex-shrink-0 text-red-400" />
+            <div>
+              <p className="text-sm font-semibold text-red-300">Pesanan Dibatalkan</p>
+              <p className="mt-0.5 text-xs text-gold-200/40">
+                Order ini dibatalkan karena tidak melakukan pembayaran dalam batas waktu yang ditentukan.
+              </p>
+            </div>
           </div>
+          <Link
+            href={`/split/${order.split_id}`}
+            className="flex items-center justify-center gap-2 rounded-xl border border-gold-700/30 bg-gold-400/5 py-3.5 text-sm font-medium text-gold-400 transition-colors hover:bg-gold-400/10"
+          >
+            <RefreshCw size={15} /> Pesan Ulang
+          </Link>
         </div>
       )}
 
